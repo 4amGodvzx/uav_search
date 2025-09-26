@@ -38,11 +38,11 @@ maps_history = []
 qwen_model = None
 qwen_processor = None # Not used in current version
     
-dino_model_directory = "/data/zhangdaoxuan/models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
+dino_model_directory = "../models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
 dino_processor = AutoProcessor.from_pretrained(dino_model_directory)
 dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(dino_model_directory).to(DEVICE)
 
-sam_model_directory = "/data/zhangdaoxuan/models/models-sam-vit-base"
+sam_model_directory = "../models/models-sam-vit-base"
 sam_processor = SamProcessor.from_pretrained(sam_model_directory)
 sam_model = SamModel.from_pretrained(sam_model_directory).to(DEVICE)
 print("[Planning] Models loaded.")

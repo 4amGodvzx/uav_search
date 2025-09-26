@@ -85,7 +85,7 @@ def action_process_func(shared_maps, shared_detection_info, shared_maps_history,
         shared_detection_info["reach_max_steps"] = True
 
 def detection_process_func(shared_detection_info, detection_lock):
-    dino_model_directory = "/data/zhangdaoxuan/models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
+    dino_model_directory = "../models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
     detection_dino_processor = AutoProcessor.from_pretrained(dino_model_directory)
     detection_dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(dino_model_directory).to(DEVICE)
     print("[Detection] Models loaded.")
@@ -129,12 +129,12 @@ def planning_process_func(shared_maps, shared_detection_info, data_lock, detecti
     '''
     qwen_model = None
     qwen_processor = None # Not used in current version
-    
-    dino_model_directory = "/data/zhangdaoxuan/models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
+
+    dino_model_directory = "../models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
     dino_processor = AutoProcessor.from_pretrained(dino_model_directory)
     dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(dino_model_directory).to(DEVICE)
 
-    sam_model_directory = "/data/zhangdaoxuan/models/models-sam-vit-base"
+    sam_model_directory = "../models/models-sam-vit-base"
     sam_processor = SamProcessor.from_pretrained(sam_model_directory)
     sam_model = SamModel.from_pretrained(sam_model_directory).to(DEVICE)
     print("[Planning] Models loaded.")
