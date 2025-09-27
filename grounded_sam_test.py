@@ -88,7 +88,7 @@ def grounded_sam(qwen_processor, qwen_model, dino_processor, dino_model, sam_pro
     mllm_result = generate_object_description(rgb_base64, object_description)
     if not mllm_result["success"]:
         print("[Planning] MLLM生成对象描述失败")
-        return result_dict
+        return result_dict, []
 
     try:
         object_part, score_part = mllm_result["response"].split(";")
