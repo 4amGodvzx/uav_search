@@ -4,13 +4,13 @@ import airsim
 import numpy as np
 from transformers import Qwen2_5_VLForConditionalGeneration, AutoProcessor, AutoModelForZeroShotObjectDetection, SamModel, SamProcessor
 
-from airsim_utils import get_images
-from grounded_sam_test import grounded_sam
-from map_updating_numpy import add_masks, downsample_masks, map_update
-from detection_test import detection_test
-from action_model_inputs_test import obstacle_update
+from uav_search.airsim_utils import get_images
+from uav_search.grounded_sam_test import grounded_sam
+from uav_search.map_updating_numpy import add_masks, downsample_masks, map_update
+from uav_search.detection_test import detection_test
+from uav_search.action_model_inputs_test import obstacle_update
 
-DEVICE = "cuda:6"
+DEVICE = "cuda:0"
 
 # Action list for testing
 Action_list = [1,1,1,1,1,1,1,1,2,2,0,0,0,0,3,0]  # 0: east, 1: south, 2: rotate left, 3: rotate right
@@ -63,7 +63,7 @@ def action_process_func(shared_maps, shared_detection_info, shared_maps_history,
             }
             shared_maps_history.append(maps_copy_for_history)
 
-        airsim.write_file(f"test_images/action_image_{int(time.time())}.png", rgb_vis)
+        airsim.write_file(f"uav_search/test_images/action_image_{int(time.time())}.png", rgb_vis)
         
         # Calculate action
         time.sleep(1)
@@ -85,7 +85,7 @@ def action_process_func(shared_maps, shared_detection_info, shared_maps_history,
         shared_detection_info["reach_max_steps"] = True
 
 def detection_process_func(shared_detection_info, detection_lock):
-    dino_model_directory = "../models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
+    dino_model_directory = "models/models-grounding-dino-base"
     detection_dino_processor = AutoProcessor.from_pretrained(dino_model_directory)
     detection_dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(dino_model_directory).to(DEVICE)
     print("[Detection] Models loaded.")
@@ -102,7 +102,7 @@ def detection_process_func(shared_detection_info, detection_lock):
         pil_image, depth_image, camera_position, camera_orientation, rgb_vis, _ = get_images(detection_client)
         camera_fov = 90
 
-        airsim.write_file(f"test_images/detection_image_{int(time.time())}.png", rgb_vis)
+        airsim.write_file(f"uav_search/test_images/detection_image_{int(time.time())}.png", rgb_vis)
 
         point_world = detection_test(detection_dino_processor, detection_dino_model, pil_image, depth_image, camera_fov, camera_position, camera_orientation, object_name)
         
@@ -130,11 +130,11 @@ def planning_process_func(shared_maps, shared_detection_info, data_lock, detecti
     qwen_model = None
     qwen_processor = None # Not used in current version
 
-    dino_model_directory = "../models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
+    dino_model_directory = "models/models-grounding-dino-base"
     dino_processor = AutoProcessor.from_pretrained(dino_model_directory)
     dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(dino_model_directory).to(DEVICE)
 
-    sam_model_directory = "../models/models-sam-vit-base"
+    sam_model_directory = "models/models-sam-vit-base"
     sam_processor = SamProcessor.from_pretrained(sam_model_directory)
     sam_model = SamModel.from_pretrained(sam_model_directory).to(DEVICE)
     print("[Planning] Models loaded.")
@@ -153,7 +153,7 @@ def planning_process_func(shared_maps, shared_detection_info, data_lock, detecti
         camera_fov = 90
         get_obs_time_end = time.time()
         
-        airsim.write_file(f"test_images/planning_image_{int(time.time())}.png", rgb_vis)
+        airsim.write_file(f"uav_search/test_images/planning_image_{int(time.time())}.png", rgb_vis)
         print(f"[Planning] Get observation time: {get_obs_time_end - get_obs_time_start:.2f} seconds")
 
         result_dict, attraction_scores = grounded_sam(qwen_processor, qwen_model, dino_processor, dino_model, sam_processor, sam_model, pil_image, rgb_base64, object_description)
@@ -244,7 +244,7 @@ if __name__ == "__main__":
             maps_history_list = list(shared_maps_history)
             print(f"Saving {len(maps_history_list)} map history records...")
             for i, maps_record in enumerate(maps_history_list):
-                np.savetxt(f"test_images/attraction_map_{i}.txt", maps_record['attraction_map'].flatten())
-                np.savetxt(f"test_images/exploration_map_{i}.txt", maps_record['exploration_map'].flatten())
-                np.savetxt(f"test_images/obstacle_map_{i}.txt", maps_record['obstacle_map'].flatten())
+                np.savetxt(f"uav_search/test_images/attraction_map_{i}.txt", maps_record['attraction_map'].flatten())
+                np.savetxt(f"uav_search/test_images/exploration_map_{i}.txt", maps_record['exploration_map'].flatten())
+                np.savetxt(f"uav_search/test_images/obstacle_map_{i}.txt", maps_record['obstacle_map'].flatten())
             print("Map history saved.")

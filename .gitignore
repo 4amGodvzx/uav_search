@@ -6,3 +6,4 @@ __pycache__/
 .logs/
 .test_images/
 .train_info/
+.collect_images/

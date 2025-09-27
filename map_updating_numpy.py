@@ -4,8 +4,8 @@ import numpy as np
 from skimage.transform import resize
 from collections import defaultdict, Counter
 
-from to_map_test import to_map_xyz
-from to_map_numpy import depth_image_to_world_points
+from uav_search.to_map_test import to_map_xyz
+from uav_search.to_map_numpy import depth_image_to_world_points
 
 def add_masks(masks):
     added_masks = []

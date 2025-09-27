@@ -2,7 +2,7 @@ import airsim
 import numpy as np
 import time
 
-from airsim_utils import get_images
+from uav_search.airsim_utils import get_images
 
 def quaternion_rotate_vector(quaternion, vector):
     q = np.array([quaternion.w_val, quaternion.x_val, quaternion.y_val, quaternion.z_val])
