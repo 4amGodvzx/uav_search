@@ -61,7 +61,9 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     grid_size = np.array([5.0, 5.0, 5.0])      # 网格尺寸 (meters)
     map_resolution = (map_size / grid_size).astype(int)  # 地图分辨率 [40, 40, 10]
     
-    REWARD_DISTANCE_THRESHOLD = 50.0 # 奖励计算的最大距离    
+    REWARD_DISTANCE_THRESHOLD = 50.0 # 奖励计算的最大距离
+    KEY_THRESHOLD = 0.9 # 关键兴趣点的阈值
+    KEY_REWARD = 10.0 # 关键兴趣点的额外奖励    
 
     # 计算地图原点在世界坐标系中的位置 (start_position 是地图的中心)
     start_pos_np = start_position.to_numpy_array()
@@ -89,6 +91,8 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
                 if depth < REWARD_DISTANCE_THRESHOLD:
                     attraction_distance_weights = (REWARD_DISTANCE_THRESHOLD - nearby_distances) / REWARD_DISTANCE_THRESHOLD
                     attraction_reward += attraction_map[gx, gy, gz] * attraction_distance_weights
+                    if attraction_map[gx, gy, gz] >= KEY_THRESHOLD:
+                        attraction_reward += KEY_REWARD * attraction_distance_weights
                 
     add_exploration_map = np.zeros_like(exploration_map)
     drone_world_pos = camera_position.to_numpy_array()

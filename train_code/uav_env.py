@@ -3,16 +3,14 @@ from gymnasium import spaces
 import numpy as np
 import airsim
 import time
+import json
+import subprocess
 
 from uav_search.airsim_utils import get_train_images
 from uav_search.action_model_inputs_test import map_input_preparation
 from uav_search.train_code.map_updating_train import map_update
 
-task_data = {
-    0: {'target_position': np.array([-203.99273681640625,137.1072540283203,-0.6712745428085327]), 'start_position': airsim.Vector3r(-178.84925950766097,140.11065228596107,-10.0), 'object_description': " Tent: Geometric dome-like form, deep blue fabric with yellow trim and tension rods, taut surface with visible seams, used for outdoor shelter or camping."},
-    1: {'target_position': np.array([-120.49274444580078,-81.59274291992188,4.728725433349609]), 'start_position': airsim.Vector3r(-145.62128359585262,-89.33258409721105,-10.0), 'object_description': " Truck:  Geometric rectangular form, industrial orange and black body with six wheels and a debris-filled cargo bed, bold \"steel\" branding on cab and sides, used for heavy-duty material transport."},
-    2: {'target_position': np.array([-101.89273834228516,-244.19273376464844,3.5287256240844727]), 'start_position': airsim.Vector3r(-140.04161056069867,-232.02151874317585,-10.0), 'object_description': " Playground: Geometric modular structure, yellow-painted wood and red plastic, curved tube slide with rope climbing net and ladder steps, designed for children's recreational play."}
-} # Will be loaded from json file in future
+
 
 class AirSimDroneEnv(gym.Env):
     # metadata is not necessary for AirSim, but we include it for completeness
@@ -32,19 +30,29 @@ class AirSimDroneEnv(gym.Env):
             "obstacle_map_input": spaces.Box(low=0, high=1, shape=(8, 40, 40), dtype=np.uint8)
         })
         # AirSim client
-        self.client = airsim.MultirotorClient()
-        self.client.confirmConnection()
-        self.client.enableApiControl(True)
-        self.client.armDisarm(True)
-        self.client.takeoffAsync().join()
-
+        self.client = None
+        self.airsim_process = None
         # Map
         self._map_reset()
         self.grid_size = 5.0
         self.grid_origin_pose = np.array([20, 20, 5])
+        # Task data
+        self.task_data = json.load(open('uav_search/task_map/rl_tasks.json'))
+        self.map_scripts = {
+            "BrushifyUrban": "BrushifyUrban/BrushifyUrban.sh",
+            "CabinLake": "CabinLake/CabinLake.sh",
+            "Downtown": "Downtown/Downtown_test1.sh",
+            "Neighborhood": "Neighborhood/NewNeighborhood.sh",
+            "Slum": "Slum/Slum_test1.sh",
+            "UrbanJapan": "UrbanJapan/UrbanJapan.sh",
+            "Venice": "Venice/Vinice_test1.sh",
+            "WesternTown": "WesternTown/WesternTown_test1.sh",
+            "WinterTown": "WinterTown/WinterTown_test1.sh"
+        }
         # Task parameters
         self.task_id = 0
-        self.object_description = ""
+        self.episode_id = 0
+        self.current_map_name = None
         self.start_position = airsim.Vector3r(0,0,0)
         self.start_orientation = airsim.utils.to_quaternion(0, 0, 0)
         self.target_position = np.array([0.0, 0.0, 0.0])
@@ -57,13 +65,48 @@ class AirSimDroneEnv(gym.Env):
         self.reward_log = {'reward': [0,0,0,0,0]}
         print("AirSim environment initialized.")
     
+    def _launch_or_switch_map(self, target_map_name):
+        if target_map_name == self.current_map_name and self.airsim_process and self.airsim_process.poll() is None:
+            print(f"Map '{target_map_name}' is already running.")
+            return True
+        print(f"Switching map... Current: '{self.current_map_name}', Target: '{target_map_name}'")
+
+        if self.airsim_process:
+            print("Terminating existing AirSim process...")
+            self.airsim_process.terminate()
+            self.airsim_process.wait(timeout=10)
+            self.client = None
+
+        script_path = self.map_scripts.get(target_map_name)
+        if not script_path:
+            raise ValueError(f"No launch script found for map: {target_map_name}")
+        
+        print(f"Launching new AirSim process with script: {script_path}")
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=1'] # 注意GPU的选择
+        self.airsim_process = subprocess.Popen(launch_command)
+        self.current_map_name = target_map_name
+        self._connect_to_airsim()
+    
+    def _connect_to_airsim(self):
+        print("Attempting to connect to AirSim...")
+        while True:
+            try:
+                self.client = airsim.MultirotorClient()
+                self.client.confirmConnection()
+                print("Successfully connected to AirSim!")
+                self.client.enableApiControl(True)
+                self.client.armDisarm(True)
+                break
+            except Exception as e:
+                print(f"Connection failed: {e}. Retrying in 3 seconds...")
+                time.sleep(3)
+    
     def _map_reset(self):
-        self.current_ground_truth_attraction_map = task_data[self.task_id]['ground_truth_attraction_map'] # From dataset
+        self.current_ground_truth_attraction_map = np.loadtxt(f'uav_search/task_map/task_{self.task_id}.txt').reshape((40, 40, 10))
         self.attraction_map = np.zeros((40, 40, 10, 2), dtype=np.float32)
         self.attraction_map[:, :, :, 1] = -1
         self.exploration_map = np.zeros((40, 40, 10), dtype=np.float32)
         self.obstacle_map = np.zeros((80, 80, 20), dtype=np.uint8)
-        self.observed_points_cnt = 0 # Only used in training
         self.uav_pose = {
             'position': np.array([20, 20, 5]),
             'orientation': 0 # 0: north, 1: west, 2: south, 3: east
@@ -142,7 +185,7 @@ class AirSimDroneEnv(gym.Env):
         W_SPARSE = 1.0
         
         # Distance-based reward
-        STEP_PENALTY = -0.2
+        STEP_PENALTY = -0.1
         distance_decrease = self.last_dist_to_target - self.current_dist_to_target
         if 10 <= self.current_dist_to_target < 30:
             k = 2.0
@@ -173,17 +216,20 @@ class AirSimDroneEnv(gym.Env):
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
         print(f"Resetting environment for task {self.task_id}")
+        selected_task = self.task_data[self.task_id]
         
+        self._launch_or_switch_map(selected_task['map'])
         self.client.enableApiControl(True)
         self.client.armDisarm(True)
         
-        self.start_position = task_data[self.task_id]['start_position'] # From dataset
+        start_pose_list = selected_task['start_position']
+        self.start_position = airsim.Vector3r(start_pose_list[0], start_pose_list[1], start_pose_list[2]) # From dataset
         self.start_orientation = airsim.utils.to_quaternion(0, 0, 0)
         pose = airsim.Pose(self.start_position, self.start_orientation)
         self.client.simSetVehiclePose(pose, True)
         
-        self.object_description = task_data[self.task_id]['object_description'] # From dataset
-        self.target_position = task_data[self.task_id]['target_position'] # From dataset
+        target_pose_list = selected_task['object_position']
+        self.target_position = np.array(target_pose_list) # From dataset
         self.current_dist_to_target = np.linalg.norm(self.target_position - np.array([self.start_position.x_val, self.start_position.y_val, self.start_position.z_val]))
         self.last_dist_to_target = self.current_dist_to_target
 
@@ -197,7 +243,11 @@ class AirSimDroneEnv(gym.Env):
         initial_observation = self._get_obs()
         info = {}  # 初始info为空字典
 
-        self.task_id = (self.task_id + 1) % 40
+        # 每个task训练1个episode
+        self.episode_id += 1
+        if self.episode_id % 1 == 0:
+            self.episode_id = 0
+            self.task_id = (self.task_id + 1) % len(self.task_data)
 
         return initial_observation, info
 
@@ -293,6 +343,8 @@ class AirSimDroneEnv(gym.Env):
         return observation, reward, terminated, truncated, info
 
     def close(self):
-        self.client.armDisarm(False)
-        self.client.enableApiControl(False)
-        print("AirSim environment closed.")
+        print("Closing environment...")
+        if self.airsim_process:
+            self.airsim_process.terminate()
+            self.airsim_process.wait()
+            print("AirSim process terminated.")

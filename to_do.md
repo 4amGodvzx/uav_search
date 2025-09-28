@@ -29,7 +29,8 @@
     - (Done)Maybe a smaller SAM model
 8. Multi Environment training
 9. (Done)The problem of uav_pose updating
-10. Get the ground truth dataset of the map
+10. (Done)Get the ground truth dataset of the map
+11. Curriculum learning
 
 # The Policies
 1. Map input: Relative location (Alt: absolute location)
@@ -71,6 +72,7 @@
         - attraction reward weight
             - attraction reward distance threshold
             - attraction reward decay rate
+            - attraction key point extra reward
         - exploration reward weight
             - exploration reward distance threshold
             - exploration reward/punishment boundary
