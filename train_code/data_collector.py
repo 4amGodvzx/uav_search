@@ -9,16 +9,20 @@ from uav_search.grounded_sam_test import grounded_sam
 from uav_search.map_updating_numpy import add_masks, downsample_masks
 from uav_search.to_map_test import to_map_xyz
 
-DEVICE = "cuda:6"
+DEVICE = "cuda:1"
 
 # Action list for testing
-Action_list = [] # 0: north, 1: west, 2: south, 3: east, 4: rotate left, 5: rotate right, 6: ascend, 7: descend
+Action_list = [1,6,1,1,5,0,0,0,0,0,0,0,0,4,7,1,1,1,1,1,4,2,2,8]
+# 0: north, 1: west, 2: south, 3: east, 4: rotate left, 5: rotate right, 6: ascend, 7: descend, 8: stop, 9: up2, 10: down2, 11: up3, 12: up4
 
-object_description = " Van: A medium-sized vehicle with a boxy shape, white exterior, sliding side door, rear double doors, and windows on the front and sides. Commonly used for transporting goods or passengers."
+object_description = "Orange Car:Geometric four-wheeled form, matte orange body with black-tinted windows, integrated spoiler and sunroof, used for personal ground transport."
 
-# 无人机初始位置和朝向
-start_position = airsim.Vector3r(-250, -140, -12)
-start_orientation = airsim.utils.to_quaternion(0, 0, -1.57)
+# 初始位置和朝向
+start_position = airsim.Vector3r(-4, -55, -10)
+
+# 实际初始位置和朝向
+a_start_position = airsim.Vector3r(-114, 28, 3)
+a_start_orientation = airsim.utils.to_quaternion(0, 0, -1.57)
 
 client = airsim.MultirotorClient()
 client.confirmConnection()
@@ -26,7 +30,7 @@ client.enableApiControl(True)
 client.armDisarm(True)
 
 client.takeoffAsync().join()
-pose = airsim.Pose(start_position, start_orientation)
+pose = airsim.Pose(a_start_position, a_start_orientation)
 client.simSetVehiclePose(pose, True)
 print("Initialize complete.")
 
@@ -38,26 +42,30 @@ maps_history = []
 qwen_model = None
 qwen_processor = None # Not used in current version
     
-dino_model_directory = "../models/models--IDEA-Research--grounding-dino-base/snapshots/12bdfa3120f3e7ec7b434d90674b3396eccf88eb"
+dino_model_directory = "/data_all/zhangdaoxuan/models/models-grounding-dino-base"
 dino_processor = AutoProcessor.from_pretrained(dino_model_directory)
 dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(dino_model_directory).to(DEVICE)
 
-sam_model_directory = "../models/models-sam-vit-base"
+sam_model_directory = "/data_all/zhangdaoxuan/models/models-sam-vit-base"
 sam_processor = SamProcessor.from_pretrained(sam_model_directory)
 sam_model = SamModel.from_pretrained(sam_model_directory).to(DEVICE)
 print("[Planning] Models loaded.")
 
 for i in range(len(Action_list)):
     
-    pil_image, depth_image, camera_position, camera_orientation, rgb_vis, rgb_base64 = get_images(client)
-    camera_fov = 90
+    while True:
+        pil_image, depth_image, camera_position, camera_orientation, rgb_vis, rgb_base64 = get_images(client)
+        camera_fov = 90
 
-    result_dict, attraction_scores = grounded_sam(qwen_processor, qwen_model, dino_processor, dino_model, sam_processor, sam_model, pil_image, rgb_base64, object_description)
+        result_dict, attraction_scores = grounded_sam(qwen_processor, qwen_model, dino_processor, dino_model, sam_processor, sam_model, pil_image, rgb_base64, object_description)
 
-    if not result_dict["success"]:
-        print("[Planning] objects detection failed, skipping this frame.")
-        time.sleep(1)
-        continue
+        if result_dict["success"]:
+            print("[Planning] Objects detection successful. Proceeding with map update.")
+            airsim.write_file(f"/data_all/zhangdaoxuan/uav_search/collect_images/collect_image_{int(time.time())}.png", rgb_vis)
+            break
+        else:
+            print("[Planning] Objects detection failed, retrying in 1 second...")
+            time.sleep(1)
     
     added_masks = add_masks(result_dict["masks"])
     prepared_masks = downsample_masks(added_masks, scale_factor=2)  # 512*512 to 256*256
@@ -112,23 +120,33 @@ for i in range(len(Action_list)):
     
     match Action_list[i]:
         case 0:
-            client.moveByVelocityAsync(0, 3, 0, duration=4).join()
-        case 1:
-            client.moveByVelocityAsync(-3, 0, 0, duration=4).join()
-        case 2:
-            client.moveByVelocityAsync(0, -3, 0, duration=4).join()
-        case 3:
             client.moveByVelocityAsync(3, 0, 0, duration=4).join()
+        case 1:
+            client.moveByVelocityAsync(0, -3, 0, duration=4).join()
+        case 2:
+            client.moveByVelocityAsync(-3, 0, 0, duration=4).join()
+        case 3:
+            client.moveByVelocityAsync(0, 3, 0, duration=4).join()
         case 4:
             client.rotateByYawRateAsync(-30, duration=3).join()
         case 5:
             client.rotateByYawRateAsync(30, duration=3).join()
         case 6:
-            client.moveToZAsync(-10, 2).join()
+            client.moveToZAsync(-10, 3).join()
         case 7:
-            client.moveToZAsync(-5, 2).join()
+            client.moveToZAsync(4, 3).join()
+        case 8:
+            print("[Action] Stop action received, ending data collection.")
+        case 9:
+            client.moveToZAsync(-40, 3).join()
+        case 10:
+            client.moveToZAsync(16, 3).join()
+        case 11:
+            client.moveToZAsync(-6, 3).join()
+        case 12:
+            client.moveToZAsync(-2, 3).join()
     print(f"[Action] Number {i} movement finished.")
     time.sleep(2)
-    
-for i in range(len(maps_history)):
-    np.savetxt(f"task_0_{i}.txt", maps_history[i].flatten())
+
+num = len(maps_history)
+np.savetxt(f"/data_all/zhangdaoxuan/uav_search/task_map_cache/task_35.txt", maps_history[num-1].flatten())
