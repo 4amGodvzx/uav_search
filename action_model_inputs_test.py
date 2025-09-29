@@ -28,7 +28,7 @@ def obstacle_update(obstacle_map, start_position, depth_image, camera_fov, camer
 
             # 边界检查
             if 0 <= gx < map_resolution[0] and 0 <= gy < map_resolution[1] and 0 <= gz < map_resolution[2]:
-                new_obstacle_map[gx, gy, gz] = 1  # 标记为障碍物
+                new_obstacle_map[gx, gy, gz] = 1.0  # 标记为障碍物
     
     return new_obstacle_map
 
@@ -88,7 +88,7 @@ def map_input_preparation(attraction_map, exploration_map, obstacle_map, uav_pos
         full_map=obstacle_map,
         center_coords=obstacle_center_coords,
         crop_size=(40, 40, 8),
-        padding_value=1,
+        padding_value=1.0,
         orientation=orientation
     )
     

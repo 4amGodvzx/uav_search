@@ -5,6 +5,9 @@ import airsim
 import time
 import json
 import subprocess
+import os
+import signal
+import logging
 
 from uav_search.airsim_utils import get_train_images
 from uav_search.action_model_inputs_test import map_input_preparation
@@ -27,15 +30,11 @@ class AirSimDroneEnv(gym.Env):
         self.observation_space = spaces.Dict({
             "attraction_map_input": spaces.Box(low=0, high=1, shape=(10, 20, 20), dtype=np.float32),
             "exploration_map_input": spaces.Box(low=0, high=1000, shape=(10, 20, 20), dtype=np.float32),
-            "obstacle_map_input": spaces.Box(low=0, high=1, shape=(8, 40, 40), dtype=np.uint8)
+            "obstacle_map_input": spaces.Box(low=0, high=1, shape=(8, 40, 40), dtype=np.float32)
         })
         # AirSim client
         self.client = None
         self.airsim_process = None
-        # Map
-        self._map_reset()
-        self.grid_size = 5.0
-        self.grid_origin_pose = np.array([20, 20, 5])
         # Task data
         self.task_data = json.load(open('uav_search/task_map/rl_tasks.json'))
         self.map_scripts = {
@@ -58,11 +57,15 @@ class AirSimDroneEnv(gym.Env):
         self.target_position = np.array([0.0, 0.0, 0.0])
         self.episode_step_count = 0
         self.max_steps_per_episode = 200 # 每回合最大步数
+        # Map
+        self._map_reset()
+        self.grid_size = 5.0
+        self.grid_origin_pose = np.array([20, 20, 5])
         # Distance to target
         self.last_dist_to_target = 0.0
         self.current_dist_to_target = 0.0
         # Log info
-        self.reward_log = {'reward': [0,0,0,0,0]}
+        self.reward_log = {'reward': [0,0,0,0]}
         print("AirSim environment initialized.")
     
     def _launch_or_switch_map(self, target_map_name):
@@ -73,29 +76,26 @@ class AirSimDroneEnv(gym.Env):
 
         if self.airsim_process:
             print("Terminating existing AirSim process...")
-            self.airsim_process.terminate()
-            self.airsim_process.wait(timeout=10)
-            self.client = None
+            self.close()
 
         script_path = self.map_scripts.get(target_map_name)
         if not script_path:
             raise ValueError(f"No launch script found for map: {target_map_name}")
         
         print(f"Launching new AirSim process with script: {script_path}")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=1'] # 注意GPU的选择
-        self.airsim_process = subprocess.Popen(launch_command)
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=3'] # 注意GPU的选择
+        self.airsim_process = subprocess.Popen(launch_command,start_new_session=True)
         self.current_map_name = target_map_name
         self._connect_to_airsim()
     
     def _connect_to_airsim(self):
         print("Attempting to connect to AirSim...")
+        time.sleep(10)
         while True:
             try:
                 self.client = airsim.MultirotorClient()
                 self.client.confirmConnection()
                 print("Successfully connected to AirSim!")
-                self.client.enableApiControl(True)
-                self.client.armDisarm(True)
                 break
             except Exception as e:
                 print(f"Connection failed: {e}. Retrying in 3 seconds...")
@@ -106,7 +106,7 @@ class AirSimDroneEnv(gym.Env):
         self.attraction_map = np.zeros((40, 40, 10, 2), dtype=np.float32)
         self.attraction_map[:, :, :, 1] = -1
         self.exploration_map = np.zeros((40, 40, 10), dtype=np.float32)
-        self.obstacle_map = np.zeros((80, 80, 20), dtype=np.uint8)
+        self.obstacle_map = np.zeros((80, 80, 20), dtype=np.float32)
         self.uav_pose = {
             'position': np.array([20, 20, 5]),
             'orientation': 0 # 0: north, 1: west, 2: south, 3: east
@@ -139,7 +139,7 @@ class AirSimDroneEnv(gym.Env):
         self.attraction_map = new_attraction_map
         self.exploration_map = new_exploration_map
         self.obstacle_map = new_obstacle_map
-        
+
         return attraction_reward, exploration_reward
 
     def _update_uav_pose_from_airsim(self):
@@ -148,8 +148,8 @@ class AirSimDroneEnv(gym.Env):
         orientation = state.kinematics_estimated.orientation
 
         delta_position = np.array([
-            position.y_val - self.start_position.y_val,
             position.x_val - self.start_position.x_val,
+            position.y_val - self.start_position.y_val,
             position.z_val - self.start_position.z_val 
         ])
         
@@ -179,8 +179,8 @@ class AirSimDroneEnv(gym.Env):
 
     def _compute_reward(self,terminated, attraction_reward=0.0, exploration_reward=0.0):
         # Reward weights
-        W_ATTRACTION = 0.1
-        W_EXPLORATION = 0.01
+        W_ATTRACTION = 0.003
+        W_EXPLORATION = 0.04
         W_DISTANCE = 1.5
         W_SPARSE = 1.0
         
@@ -206,10 +206,12 @@ class AirSimDroneEnv(gym.Env):
                 sparse_reward = -200.0
             
         # Log
+        '''
         self.reward_log['reward'][0] = dis_reward
         self.reward_log['reward'][1] = sparse_reward
         self.reward_log['reward'][2] = attraction_reward
         self.reward_log['reward'][3] = exploration_reward
+        '''
 
         return W_DISTANCE * dis_reward + W_SPARSE * sparse_reward + W_ATTRACTION * attraction_reward + W_EXPLORATION * exploration_reward
 
@@ -219,8 +221,11 @@ class AirSimDroneEnv(gym.Env):
         selected_task = self.task_data[self.task_id]
         
         self._launch_or_switch_map(selected_task['map'])
+        
+        self.client.reset()
         self.client.enableApiControl(True)
         self.client.armDisarm(True)
+        self.client.takeoffAsync().join()
         
         start_pose_list = selected_task['start_position']
         self.start_position = airsim.Vector3r(start_pose_list[0], start_pose_list[1], start_pose_list[2]) # From dataset
@@ -243,108 +248,138 @@ class AirSimDroneEnv(gym.Env):
         initial_observation = self._get_obs()
         info = {}  # 初始info为空字典
 
-        # 每个task训练1个episode
+        # 每个task训练10个episode
         self.episode_id += 1
-        if self.episode_id % 1 == 0:
+        if self.episode_id >= 10:
             self.episode_id = 0
             self.task_id = (self.task_id + 1) % len(self.task_data)
 
         return initial_observation, info
 
     def step(self, action):
-        self.episode_step_count += 1
-        # Log info
-        if self.episode_step_count % 100 == 0:
-            print(f"last_uav_pose: {self.uav_pose}")
-        
-        start_time = time.time()
-        state = self.client.getMultirotorState()
-        position = state.kinematics_estimated.position
-        orientation = state.kinematics_estimated.orientation
-        _, _, yaw = airsim.to_eularian_angles(orientation)
-        
-        np_position = np.array([position.x_val, position.y_val, position.z_val])
-        new_position = self._compute_new_position(10, position, yaw)
-        
-        # 0:north, 1:west, 2:south, 3:east
-        YAW_ANGLES = [0, -90, 180, 90]
-        
-        match action:
-            case 0: 
-                self.client.moveToPositionAsync(new_position.x_val, new_position.y_val, new_position.z_val, 3).join()
-            case 1:
-                current_orientation_idx = self.uav_pose['orientation']
-                new_orientation_idx = (current_orientation_idx + 1) % 4
-                target_yaw = YAW_ANGLES[new_orientation_idx]
-                self.client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
-            case 2:
-                current_orientation_idx = self.uav_pose['orientation']
-                new_orientation_idx = (current_orientation_idx - 1 + 4) % 4
-                target_yaw = YAW_ANGLES[new_orientation_idx]
-                self.client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
-            case 3:
-                current_orientation_idx = self.uav_pose['orientation']
-                new_orientation_idx = (current_orientation_idx + 2) % 4
-                target_yaw = YAW_ANGLES[new_orientation_idx]
-                self.client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
-            case 4:
-                self.client.moveToZAsync(position.z_val - self.grid_size, 2).join()
-            case 5:
-                self.client.moveToZAsync(position.z_val + self.grid_size, 2).join()
-        
-        self._update_uav_pose_from_airsim()
-        
-        # 检查是否结束 (Terminated & Truncated)
-        terminated = False
-        self.last_dist_to_target = self.current_dist_to_target
-        self.current_dist_to_target = np.linalg.norm(self.target_position - np_position)
-        collision_info = self.client.simGetCollisionInfo()
-
-        if self.uav_pose['position'][0] < 0 or self.uav_pose['position'][0] >= 40 or \
-           self.uav_pose['position'][1] < 0 or self.uav_pose['position'][1] >= 40 or \
-           self.uav_pose['position'][2] < 0 or self.uav_pose['position'][2] >= 10:
-            terminated = True
-            print("Out of bounds! Episode terminated.")
-
-        if collision_info.has_collided:
-            terminated = True
-            print("Collision detected! Episode terminated.")
-            self.client.reset()
-        
-        if self.current_dist_to_target < 10.0:
-            terminated = True
-            print("Target reached! Episode terminated.")
-
-        truncated = False
-        if self.episode_step_count >= self.max_steps_per_episode:
-            truncated = True
-            print("Max steps reached. Episode truncated.")
-        
-        if not terminated and not truncated:
-            attraction_reward, exploration_reward = self._map_update()
-            observation = self._get_obs()
-        else:
-            observation = self._get_obs()
-
-        reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
-
-        end_time = time.time()
-        # Log info
-        if self.episode_step_count % 100 == 0:
-            print(f"Task {self.task_id}, Step {self.episode_step_count}")
-            print(f"Action taken: {action}")
-            print(f"Reward components: {self.reward_log['reward']}")
-            print(f"Current_uav_pose: {self.uav_pose}")
-            print(f"Step time: {end_time - start_time} seconds")
-            print(f"Start position: {self.start_position}, Current position: {np_position}, Distance to target: {self.current_dist_to_target}")
+        try:
+            self.episode_step_count += 1
+            # Log info
+            #if self.episode_step_count % 1 == 0:
+                #print(f"last_uav_pose: {self.uav_pose}")
             
-        info = {}
+            state = self.client.getMultirotorState()
+            position = state.kinematics_estimated.position
+            orientation = state.kinematics_estimated.orientation
+            _, _, yaw = airsim.to_eularian_angles(orientation)
+            
+            np_position = np.array([position.x_val, position.y_val, position.z_val])
+            new_position = self._compute_new_position(10, position, yaw)
+            
+            # 0:north, 1:west, 2:south, 3:east
+            YAW_ANGLES = [0, -90, 180, 90]
+            
+            match action:
+                case 0: 
+                    self.client.moveToPositionAsync(new_position.x_val, new_position.y_val, new_position.z_val, 3, timeout_sec=5).join()
+                case 1:
+                    current_orientation_idx = self.uav_pose['orientation']
+                    new_orientation_idx = (current_orientation_idx + 1) % 4
+                    target_yaw = YAW_ANGLES[new_orientation_idx]
+                    self.client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
+                case 2:
+                    current_orientation_idx = self.uav_pose['orientation']
+                    new_orientation_idx = (current_orientation_idx - 1 + 4) % 4
+                    target_yaw = YAW_ANGLES[new_orientation_idx]
+                    self.client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
+                case 3:
+                    current_orientation_idx = self.uav_pose['orientation']
+                    new_orientation_idx = (current_orientation_idx + 2) % 4
+                    target_yaw = YAW_ANGLES[new_orientation_idx]
+                    self.client.rotateToYawAsync(target_yaw, timeout_sec=2).join()
+                case 4:
+                    self.client.moveToZAsync(position.z_val - self.grid_size, 2, timeout_sec=3).join()
+                case 5:
+                    self.client.moveToZAsync(position.z_val + self.grid_size, 2, timeout_sec=3).join()
+            
+            self._update_uav_pose_from_airsim()
+            
+            # 检查是否结束 (Terminated & Truncated)
+            terminated = False
+            self.last_dist_to_target = self.current_dist_to_target
+            self.current_dist_to_target = np.linalg.norm(self.target_position - np_position)
+            collision_info = self.client.simGetCollisionInfo()
+
+            if self.uav_pose['position'][0] < 0 or self.uav_pose['position'][0] >= 40 or \
+            self.uav_pose['position'][1] < 0 or self.uav_pose['position'][1] >= 40 or \
+            self.uav_pose['position'][2] < 0 or self.uav_pose['position'][2] >= 10:
+                terminated = True
+                print("Out of bounds! Episode terminated.")
+
+            if collision_info.has_collided:
+                terminated = True
+                print("Collision detected! Episode terminated.")
+                self.client.reset()
+            
+            if self.current_dist_to_target < 10.0:
+                terminated = True
+                print("Target reached! Episode terminated.")
+
+            truncated = False
+            if self.episode_step_count >= self.max_steps_per_episode:
+                truncated = True
+                print("Max steps reached. Episode truncated.")
+            
+            if not terminated and not truncated:
+                attraction_reward, exploration_reward = self._map_update()
+                observation = self._get_obs()
+            else:
+                attraction_reward, exploration_reward = 0.0, 0.0
+                observation = self._get_obs()
+
+            reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
+
+            # Log info
+            '''
+            if self.episode_step_count % 1 == 0:
+                print(f"Task {self.task_id}, Step {self.episode_step_count}")
+                print(f"Action taken: {action}")
+                print(f"Reward components: {self.reward_log['reward']}")
+                print(f"Current_uav_pose: {self.uav_pose}")
+                print(f"Step time: {end_time - start_time} seconds")
+                print(f"Start position: {self.start_position}, Current position: {np_position}, Distance to target: {self.current_dist_to_target}")
+            '''
+            
+            info = {}
+        
+        except Exception as e:
+            print(f"An error occurred during step execution: {e}")
+            observation = self._get_obs()
+            reward = 0.0
+            terminated = True
+            truncated = False
+            logging.basicConfig(filename='uav_search/logs/error.log', level=logging.ERROR)
+            logging.error("Exception occurred", exc_info=True)
+            info = {"error": str(e)}
 
         return observation, reward, terminated, truncated, info
 
     def close(self):
-        print("Closing environment...")
-        if self.airsim_process:
-            self.airsim_process.terminate()
-            self.airsim_process.wait()
-            print("AirSim process terminated.")
+        if self.airsim_process and self.airsim_process.poll() is None: # 检查进程是否仍在运行
+            print(f"Attempting to terminate AirSim process group with PGID: {os.getpgid(self.airsim_process.pid)}")
+            try:
+                pgid = os.getpgid(self.airsim_process.pid)
+                os.killpg(pgid, signal.SIGTERM)
+                self.airsim_process.wait(timeout=10)
+                print("Process group terminated gracefully.")
+                time.sleep(2) # 确保进程完全关闭
+                os.killpg(pgid, signal.SIGTERM)
+                time.sleep(1)
+            except subprocess.TimeoutExpired:
+                print("Process group did not terminate gracefully, forcing kill (SIGKILL).")
+                pgid = os.getpgid(self.airsim_process.pid)
+                os.killpg(pgid, signal.SIGKILL)
+                self.airsim_process.wait()
+                print("Process group killed.")
+            except ProcessLookupError:
+                print("Process was already gone before termination signal could be sent.")
+            except Exception as e:
+                print(f"An error occurred while closing the process group: {e}")
+        self.airsim_process = None
+        self.client = None
+        print("Environment closed.")

@@ -19,6 +19,10 @@ def trace_rays_vectorized(drone_world_pos, endpoints_world, map_origin, grid_siz
     directions = endpoints_world - start_points
     distances = np.linalg.norm(directions, axis=1)
 
+    # 如果distances全为0或者为空，直接返回空数组
+    if np.all(distances == 0) or distances.size == 0:
+        return np.empty((0, 3), dtype=np.int32)
+    
     # 确定最长的射线
     max_distance = np.max(distances)
     step_size = grid_size[0] * 0.5
@@ -60,6 +64,9 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     map_size = np.array([200.0, 200.0, 50.0])  # 地图尺寸 (meters)
     grid_size = np.array([5.0, 5.0, 5.0])      # 网格尺寸 (meters)
     map_resolution = (map_size / grid_size).astype(int)  # 地图分辨率 [40, 40, 10]
+    obstacle_grid_size = np.array([2.5, 2.5, 2.5])
+    obstacle_map_resolution = (map_size / obstacle_grid_size).astype(int)
+    
     
     REWARD_DISTANCE_THRESHOLD = 50.0 # 奖励计算的最大距离
     KEY_THRESHOLD = 0.9 # 关键兴趣点的阈值
@@ -81,17 +88,21 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
             map_coords = world_coords - map_origin
             grid_indices = (map_coords / grid_size).astype(int)
             gx, gy, gz = grid_indices
-            
+            obstacle_grid_indices = (map_coords / obstacle_grid_size).astype(int)
+            gx_o, gy_o, gz_o = obstacle_grid_indices
+
+            if 0 <= gx_o < obstacle_map_resolution[0] and 0 <= gy_o < obstacle_map_resolution[1] and 0 <= gz_o < obstacle_map_resolution[2]:
+                new_obstacle_map[gx_o, gy_o, gz_o] = 1.0  # 标记为障碍物
+
             # 边界检查
             if 0 <= gx < map_resolution[0] and 0 <= gy < map_resolution[1] and 0 <= gz < map_resolution[2]:
-                new_attraction_map[gx, gy, gz] = current_ground_truth_attraction_map[gx, gy, gz]
-                new_obstacle_map[gx, gy, gz] = 1  # 标记为障碍物
+                new_attraction_map[gx, gy, gz, 0] = current_ground_truth_attraction_map[gx, gy, gz]
                 
                 # 计算兴趣奖励
                 if depth < REWARD_DISTANCE_THRESHOLD:
-                    attraction_distance_weights = (REWARD_DISTANCE_THRESHOLD - nearby_distances) / REWARD_DISTANCE_THRESHOLD
-                    attraction_reward += attraction_map[gx, gy, gz] * attraction_distance_weights
-                    if attraction_map[gx, gy, gz] >= KEY_THRESHOLD:
+                    attraction_distance_weights = (REWARD_DISTANCE_THRESHOLD - depth) / REWARD_DISTANCE_THRESHOLD
+                    attraction_reward += attraction_map[gx, gy, gz, 0] * attraction_distance_weights
+                    if attraction_map[gx, gy, gz, 0] >= KEY_THRESHOLD:
                         attraction_reward += KEY_REWARD * attraction_distance_weights
                 
     add_exploration_map = np.zeros_like(exploration_map)
@@ -113,17 +124,17 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     traversed_grids_indices = trace_rays_vectorized(
         drone_world_pos, valid_endpoints, map_origin, grid_size, map_resolution
     )
-
+    
+    # 计算探索奖励
+    exploration_reward = 0.0
+    
     if traversed_grids_indices.shape[0] == 0:
         exploration_reward = 0.0
-        return new_attraction_map, new_exploration_map, new_obstacle_map
+        return new_attraction_map, new_exploration_map, new_obstacle_map, attraction_reward, exploration_reward
     
     # 计算所有这些栅格到无人机的距离
     grid_centers_world = (traversed_grids_indices + 0.5) * grid_size + map_origin
     distances_to_grids = np.linalg.norm(grid_centers_world - drone_world_pos, axis=1)
-    
-    # 计算探索奖励
-    exploration_reward = 0.0
  
     positive_gain = 1.0  # 探索未知区域的基础奖励增益
     negative_gain = 1.0  # 重复探索已知区域的基础惩罚增益

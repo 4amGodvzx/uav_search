@@ -12,7 +12,7 @@
         "task_id": 1,
         "map": "BrushifyUrban",
         "object_name": "PlaygroundSet",
-        "的ifficulty": "Simple",
+        "difficulty": "Simple",
         "description": "Multi-functional wooden play structure with slide, climbing wall, swings, and elevated playhouse, red and green painted surfaces, intended for children.",
         "start_position": [1301.0,-1028.0,-6.0],
         "object_position": [1263.0,-989.0,2.0]

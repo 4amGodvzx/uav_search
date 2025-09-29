@@ -31,6 +31,7 @@
 9. (Done)The problem of uav_pose updating
 10. (Done)Get the ground truth dataset of the map
 11. Curriculum learning
+12. (Warning)Set the timeout time of airsim api in test code
 
 # The Policies
 1. Map input: Relative location (Alt: absolute location)
@@ -81,6 +82,7 @@
         - success reward weight
     - training policy and hyperparameters
     - policy model structure and hyperparameters
-    - success threshold
+    - success distance threshold
 Warning: RGB image size must be 2 times the depth image size
 (Done)Warning: Logical error in exploration map updating
+Warning: The error in trace_rays_vectorized()
