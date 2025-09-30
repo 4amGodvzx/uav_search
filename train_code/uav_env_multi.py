@@ -19,7 +19,7 @@ class AirSimDroneEnv(gym.Env):
     # metadata is not necessary for AirSim, but we include it for completeness
     metadata = {"render_modes": ["human"]}
 
-    def __init__(self):
+    def __init__(self, worker_index, base_port=41451):
         super(AirSimDroneEnv, self).__init__()
 
         # Action space
@@ -33,6 +33,9 @@ class AirSimDroneEnv(gym.Env):
             "obstacle_map_input": spaces.Box(low=0, high=1, shape=(8, 40, 40), dtype=np.float32)
         })
         # AirSim client
+        self.worker_index = worker_index
+        self.api_port = base_port + worker_index * 1
+        self.settings_path = self._generate_settings_json()
         self.client = None
         self.airsim_process = None
         # Task data
@@ -68,6 +71,56 @@ class AirSimDroneEnv(gym.Env):
         self.reward_log = {'reward': [0,0,0,0]}
         print("AirSim environment initialized.")
     
+    def _generate_settings_json(self):
+        settings_dict = {
+            "SeeDocsAt": "https://github.com/Microsoft/AirSim/blob/main/docs/settings.md",
+            "SettingsVersion": 1.2,
+            "SimMode": "Multirotor",
+            "ClockSpeed": 4.0,
+            "ApiServerPort": self.api_port,
+            "CameraDefaults": {
+                "CaptureSettings": [
+                    {
+                        "ImageType": 0,
+                        "Width": 512,
+                        "Height": 512,
+                        "FOV_Degrees": 90,
+                        "AutoExposureSpeed": 100,
+                        "AutoExposureMaxBrightness": 0.64,
+                        "AutoExposureMinBrightness": 0.03
+                    },
+                    {
+                        "ImageType": 1,
+                        "Width": 64,
+                        "Height": 64,
+                        "FOV_Degrees": 90,
+                        "AutoExposureSpeed": 100,
+                        "AutoExposureMaxBrightness": 0.64,
+                        "AutoExposureMinBrightness": 0.03
+                    },
+                    {
+                        "ImageType": 2,
+                        "Width": 64,
+                        "Height": 64,
+                        "FOV_Degrees": 90,
+                        "AutoExposureSpeed": 100,
+                        "AutoExposureMaxBrightness": 0.64,
+                        "AutoExposureMinBrightness": 0.03
+                    }
+                ]
+            }
+        }
+
+        settings_filename = f"settings_{self.worker_index}.json"
+        temp_dir = "airsim_settings"
+        os.makedirs(temp_dir, exist_ok=True)
+        settings_path = os.path.join(temp_dir, settings_filename)
+        
+        with open(settings_path, 'w') as f:
+            json.dump(settings_dict, f, indent=4)
+        
+        return os.path.abspath(settings_path)
+    
     def _launch_or_switch_map(self, target_map_name):
         if target_map_name == self.current_map_name and self.airsim_process and self.airsim_process.poll() is None:
             print(f"Map '{target_map_name}' is already running.")
@@ -83,7 +136,7 @@ class AirSimDroneEnv(gym.Env):
             raise ValueError(f"No launch script found for map: {target_map_name}")
         
         print(f"Launching new AirSim process with script: {script_path}")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=3', f'-settings="{os.path.abspath("airsim_settings/settings_0.json")}"'] # 注意GPU的选择
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=3', f'-settings="{self.settings_path}"'] # 注意GPU的选择
         self.airsim_process = subprocess.Popen(launch_command,start_new_session=True)
         self.current_map_name = target_map_name
         self._connect_to_airsim()
@@ -93,7 +146,7 @@ class AirSimDroneEnv(gym.Env):
         time.sleep(10)
         while True:
             try:
-                self.client = airsim.MultirotorClient(port=41451)
+                self.client = airsim.MultirotorClient(port=self.api_port)
                 self.client.confirmConnection()
                 print("Successfully connected to AirSim!")
                 break

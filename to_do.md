@@ -27,11 +27,17 @@
     - (Done)Getting images from airsim is too slow
     - (not so necessary)Improve the efficiency of map updating
     - (Done)Maybe a smaller SAM model
-8. Multi Environment training
+8. (Done)Multi Environment training
 9. (Done)The problem of uav_pose updating
 10. (Done)Get the ground truth dataset of the map
 11. Curriculum learning
-12. (Warning)Set the timeout time of airsim api in test code
+12. Warning: Set the timeout time of airsim api in test code
+13. (Done)Warning: Logical error in exploration map updating
+14. Warning: The error in trace_rays_vectorized()
+15. Warning: The uav prefers to get more attraction reward rather than reach the target quickly
+16. Warning: The attraction reward scale is different in different maps
+17. More training logs
+18. EvalCallBack()
 
 # The Policies
 1. Map input: Relative location (Alt: absolute location)
@@ -43,6 +49,9 @@
 
 # Hyperparameters or method to decide(to be completed)
 
+0. settings.json
+    - RGB camera resolution
+    - Depth camera resolution
 1. multiprocess_test.py
     - attraction/exploration/obstacle map size
     - time ratio between action/planning/detection
@@ -64,7 +73,6 @@
     - padding value
 7. hyperparameters and model choice for MLLM, GroundingDINO, SAM
 8. RL training hyperparameters
-    - max steps per task in training
     - reward design
         - distance reward weight
             - distance reward distance threshold
@@ -80,9 +88,12 @@
             - exploration reward decay rate
         - collision/boundary punishment weight
         - success reward weight
+            - success distance threshold
+    - environment clockspeed
+    - data input policy
+        - episodes per task
+    - max steps per task in training   
     - training policy and hyperparameters
     - policy model structure and hyperparameters
-    - success distance threshold
-Warning: RGB image size must be 2 times the depth image size
-(Done)Warning: Logical error in exploration map updating
-Warning: The error in trace_rays_vectorized()
+
+- Warning: RGB image size must be 2 times the depth image size
