@@ -8,6 +8,7 @@ import subprocess
 import os
 import signal
 import logging
+import datetime
 
 from uav_search.airsim_utils import get_train_images
 from uav_search.action_model_inputs_test import map_input_preparation
@@ -52,7 +53,17 @@ class AirSimDroneEnv(gym.Env):
             "WinterTown": "WinterTown/WinterTown_test1.sh"
         }
         # Task parameters
-        self.task_id = 0
+        match self.worker_index:
+            case 0:
+                self.task_id = 0
+            case 1:
+                self.task_id = 4
+            case 2:
+                self.task_id = len(self.task_data) - 1
+            case 3:
+                self.task_id = len(self.task_data) - 5
+            case _:
+                self.task_id = 0
         self.episode_id = 0
         self.current_map_name = None
         self.start_position = airsim.Vector3r(0,0,0)
@@ -68,7 +79,8 @@ class AirSimDroneEnv(gym.Env):
         self.last_dist_to_target = 0.0
         self.current_dist_to_target = 0.0
         # Log info
-        self.reward_log = {'reward': [0,0,0,0]}
+        self.reward_log = [0,0,0,0]
+        self.distance_sum = 0.0
         print("AirSim environment initialized.")
     
     def _generate_settings_json(self):
@@ -238,7 +250,7 @@ class AirSimDroneEnv(gym.Env):
         W_SPARSE = 1.0
         
         # Distance-based reward
-        STEP_PENALTY = -0.1
+        STEP_PENALTY = -0.5
         distance_decrease = self.last_dist_to_target - self.current_dist_to_target
         if 10 <= self.current_dist_to_target < 30:
             k = 2.0
@@ -259,12 +271,10 @@ class AirSimDroneEnv(gym.Env):
                 sparse_reward = -200.0
             
         # Log
-        '''
-        self.reward_log['reward'][0] = dis_reward
-        self.reward_log['reward'][1] = sparse_reward
-        self.reward_log['reward'][2] = attraction_reward
-        self.reward_log['reward'][3] = exploration_reward
-        '''
+        self.reward_log[0] += W_DISTANCE * dis_reward
+        self.reward_log[1] += W_SPARSE * sparse_reward
+        self.reward_log[2] += W_ATTRACTION * attraction_reward
+        self.reward_log[3] += W_EXPLORATION * exploration_reward
 
         return W_DISTANCE * dis_reward + W_SPARSE * sparse_reward + W_ATTRACTION * attraction_reward + W_EXPLORATION * exploration_reward
 
@@ -299,22 +309,44 @@ class AirSimDroneEnv(gym.Env):
         # 获取初始观测值
         _, _ = self._map_update()
         initial_observation = self._get_obs()
-        info = {}  # 初始info为空字典
+        
+        # Log info
+        self.reward_log = [0,0,0,0]
+        self.distance_sum = 0.0
+        info = {
+            "ep_distance": 0.0,
+            "ep_reward_distance": 0.0,
+            "ep_reward_sparse": 0.0,
+            "ep_reward_attraction": 0.0,
+            "ep_reward_exploration": 0.0
+        }
+        log_dir = "uav_search/train_logs"
+        os.makedirs(log_dir, exist_ok=True)
+        log_filename = os.path.join(log_dir, f"worker_{self.worker_index}_reset_log.txt")
+        with open(log_filename, 'a') as log_file:
+            log_file.write(f"{datetime.datetime.now()} - Task {self.task_id} ends\n")
 
         # 每个task训练10个episode
         self.episode_id += 1
         if self.episode_id >= 10:
             self.episode_id = 0
-            self.task_id = (self.task_id + 1) % len(self.task_data)
+            match self.worker_index:
+                case 0:
+                    self.task_id = (self.task_id + 1) % len(self.task_data)
+                case 1:
+                    self.task_id = (self.task_id + 1) % len(self.task_data)
+                case 2:
+                    self.task_id = (self.task_id - 1) % len(self.task_data)
+                case 3:
+                    self.task_id = (self.task_id - 1) % len(self.task_data)
+                case _:
+                    self.task_id = (self.task_id + 1) % len(self.task_data)
 
         return initial_observation, info
 
     def step(self, action):
         try:
             self.episode_step_count += 1
-            # Log info
-            #if self.episode_step_count % 1 == 0:
-                #print(f"last_uav_pose: {self.uav_pose}")
             
             state = self.client.getMultirotorState()
             position = state.kinematics_estimated.position
@@ -352,6 +384,8 @@ class AirSimDroneEnv(gym.Env):
             
             self._update_uav_pose_from_airsim()
             
+            self.distance_sum += self.current_dist_to_target
+            
             # 检查是否结束 (Terminated & Truncated)
             terminated = False
             self.last_dist_to_target = self.current_dist_to_target
@@ -381,24 +415,20 @@ class AirSimDroneEnv(gym.Env):
             if not terminated and not truncated:
                 attraction_reward, exploration_reward = self._map_update()
                 observation = self._get_obs()
+                info = {}
             else:
                 attraction_reward, exploration_reward = 0.0, 0.0
                 observation = self._get_obs()
-
-            reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
-
-            # Log info
-            '''
-            if self.episode_step_count % 1 == 0:
-                print(f"Task {self.task_id}, Step {self.episode_step_count}")
-                print(f"Action taken: {action}")
-                print(f"Reward components: {self.reward_log['reward']}")
-                print(f"Current_uav_pose: {self.uav_pose}")
-                print(f"Step time: {end_time - start_time} seconds")
-                print(f"Start position: {self.start_position}, Current position: {np_position}, Distance to target: {self.current_dist_to_target}")
-            '''
+                # Log info
+                info = {
+                    "ep_distance_mean": self.current_dist_to_target / self.episode_step_count,
+                    "ep_reward_distance_mean": self.reward_log[0] / self.episode_step_count,
+                    "ep_reward_sparse_mean": self.reward_log[1] / self.episode_step_count,
+                    "ep_reward_attraction_mean": self.reward_log[2] / self.episode_step_count,
+                    "ep_reward_exploration_mean": self.reward_log[3] / self.episode_step_count
+                }
             
-            info = {}
+            reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
         
         except Exception as e:
             print(f"An error occurred during step execution: {e}")
@@ -435,4 +465,5 @@ class AirSimDroneEnv(gym.Env):
                 print(f"An error occurred while closing the process group: {e}")
         self.airsim_process = None
         self.client = None
+        time.sleep(7)
         print("Environment closed.")

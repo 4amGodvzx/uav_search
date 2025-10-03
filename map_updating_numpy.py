@@ -46,6 +46,10 @@ def trace_rays_vectorized(drone_world_pos, endpoints_world, map_origin, grid_siz
     directions = endpoints_world - start_points
     distances = np.linalg.norm(directions, axis=1)
 
+    # 如果distances全为0或者为空，直接返回空数组
+    if np.all(distances == 0) or distances.size == 0:
+        return np.empty((0, 3), dtype=np.int32)
+
     # 确定最长的射线
     max_distance = np.max(distances)
     step_size = grid_size[0] * 0.5

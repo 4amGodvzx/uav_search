@@ -49,7 +49,7 @@ class AirSimDroneEnv(gym.Env):
             "WinterTown": "WinterTown/WinterTown_test1.sh"
         }
         # Task parameters
-        self.task_id = 0
+        self.task_id = 28
         self.episode_id = 0
         self.current_map_name = None
         self.start_position = airsim.Vector3r(0,0,0)
@@ -185,7 +185,7 @@ class AirSimDroneEnv(gym.Env):
         W_SPARSE = 1.0
         
         # Distance-based reward
-        STEP_PENALTY = -0.1
+        STEP_PENALTY = -0.5
         distance_decrease = self.last_dist_to_target - self.current_dist_to_target
         if 10 <= self.current_dist_to_target < 30:
             k = 2.0
@@ -206,12 +206,12 @@ class AirSimDroneEnv(gym.Env):
                 sparse_reward = -200.0
             
         # Log
-        '''
+        
         self.reward_log['reward'][0] = dis_reward
         self.reward_log['reward'][1] = sparse_reward
         self.reward_log['reward'][2] = attraction_reward
         self.reward_log['reward'][3] = exploration_reward
-        '''
+        
 
         return W_DISTANCE * dis_reward + W_SPARSE * sparse_reward + W_ATTRACTION * attraction_reward + W_EXPLORATION * exploration_reward
 
@@ -248,9 +248,9 @@ class AirSimDroneEnv(gym.Env):
         initial_observation = self._get_obs()
         info = {}  # 初始info为空字典
 
-        # 每个task训练10个episode
+        # 每个task训练1个episode
         self.episode_id += 1
-        if self.episode_id >= 10:
+        if self.episode_id >= 1:
             self.episode_id = 0
             self.task_id = (self.task_id + 1) % len(self.task_data)
 
@@ -335,15 +335,15 @@ class AirSimDroneEnv(gym.Env):
             reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
 
             # Log info
-            '''
+            
             if self.episode_step_count % 1 == 0:
                 print(f"Task {self.task_id}, Step {self.episode_step_count}")
-                print(f"Action taken: {action}")
+                #print(f"Action taken: {action}")
                 print(f"Reward components: {self.reward_log['reward']}")
-                print(f"Current_uav_pose: {self.uav_pose}")
-                print(f"Step time: {end_time - start_time} seconds")
-                print(f"Start position: {self.start_position}, Current position: {np_position}, Distance to target: {self.current_dist_to_target}")
-            '''
+                #print(f"Current_uav_pose: {self.uav_pose}")
+                #print(f"Step time: {end_time - start_time} seconds")
+                #print(f"Start position: {self.start_position}, Current position: {np_position}, Distance to target: {self.current_dist_to_target}")
+            
             
             info = {}
         

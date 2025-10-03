@@ -8,7 +8,6 @@
     - (Done)Maybe we should consider fixing the start orientation of the uav?
 - (not necessary)the smoothness of the action
 2. (Done)The model stage 2: When the object is visible
-    - X. Special problem: Not enough CUDA memory in my laptop
 3. (Done)Obstacle avoidance
     - (Done)Should this be designed in the model or in a standalone module?
 4. (Done)The problem of boundary
@@ -16,7 +15,7 @@
     - (Done)Should we design a mechanism to prevent from overstepping the boundary?
 5. (Done)The process logic for the exploration map
     - (Done)Punish observing the same place for too long only when the observed area is near enough from uav.
-6. Problem about the deciding LLM : episodical hallucination
+
 7. Efficiency
     - (Done)Maybe a smaller model?
     - (Done)Discard detected objects that are too small?(those low-quality detections)
@@ -25,19 +24,21 @@
     - (Done)Multithreading -> Multiprocessing
     - (Done)GroundingDINO in detection is too slow
     - (Done)Getting images from airsim is too slow
-    - (not so necessary)Improve the efficiency of map updating
+    - (Done)Improve the efficiency of map updating
     - (Done)Maybe a smaller SAM model
 8. (Done)Multi Environment training
 9. (Done)The problem of uav_pose updating
 10. (Done)Get the ground truth dataset of the map
-11. Curriculum learning
-12. Warning: Set the timeout time of airsim api in test code
-13. (Done)Warning: Logical error in exploration map updating
-14. Warning: The error in trace_rays_vectorized()
-15. Warning: The uav prefers to get more attraction reward rather than reach the target quickly
-16. Warning: The attraction reward scale is different in different maps
-17. More training logs
-18. EvalCallBack()
+11. (Done)Warning: Logical error in exploration map updating
+12. (Done)Warning: The error in trace_rays_vectorized()
+13. Problem about the deciding LLM : episodical hallucination
+14. Curriculum learning
+15. Warning: Set the timeout time of airsim api in test code
+16. Warning: The uav prefers to get more attraction reward rather than reach the target quickly
+17. Warning: The attraction reward scale is different in different maps
+18. More training logs
+19. (not neccesary)EvalCallBack()
+20. (Done) Catastrophic forgetting in RL training
 
 # The Policies
 1. Map input: Relative location (Alt: absolute location)
@@ -91,7 +92,9 @@
             - success distance threshold
     - environment clockspeed
     - data input policy
+        - environment number
         - episodes per task
+        - curriculum policy
     - max steps per task in training   
     - training policy and hyperparameters
     - policy model structure and hyperparameters
