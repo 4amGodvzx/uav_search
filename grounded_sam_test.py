@@ -12,7 +12,7 @@ text_threshold = 0.3
 
 def grounded_sam(qwen_processor, qwen_model, dino_processor, dino_model, sam_processor, sam_model, pil_image, rgb_base64, object_description):
 
-    device = "cuda:1"
+    device = "cuda:7"
     warnings.filterwarnings("ignore")  # 关闭所有警告
     
     time_start = time.time()
@@ -103,8 +103,8 @@ def grounded_sam(qwen_processor, qwen_model, dino_processor, dino_model, sam_pro
         print("[Planning] 解析MLLM响应失败: 对象数量与分数数量不匹配")
         return result_dict, []
 
-    print("[Planning] text_labels:", text_labels)
-    print("[Planning] attraction_scores:", attraction_scores)
+    #print("[Planning] text_labels:", text_labels)
+    #print("[Planning] attraction_scores:", attraction_scores)
 
     time_dino_start = time.time()
     
@@ -147,7 +147,7 @@ def grounded_sam(qwen_processor, qwen_model, dino_processor, dino_model, sam_pro
             center_y = (box[1] + box[3]) / 2
             input_point = [[(center_x.item(), center_y.item())]]
             
-            print(f"[Planning] Detected {label} (score={score:.3f}) at {box.tolist()}")
+            #print(f"[Planning] Detected {label} (score={score:.3f}) at {box.tolist()}")
             
             inputs = sam_processor(
                 images=pil_image,

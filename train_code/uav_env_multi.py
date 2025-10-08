@@ -79,6 +79,13 @@ class AirSimDroneEnv(gym.Env):
         self.last_dist_to_target = 0.0
         self.current_dist_to_target = 0.0
         # Log info
+        self.log = {
+            "ep_distance": 0.0,
+            "ep_reward_distance": 0.0,
+            "ep_reward_sparse": 0.0,
+            "ep_reward_attraction": 0.0,
+            "ep_reward_exploration": 0.0
+        }
         self.reward_log = [0,0,0,0]
         self.distance_sum = 0.0
         print("AirSim environment initialized.")
@@ -148,7 +155,7 @@ class AirSimDroneEnv(gym.Env):
             raise ValueError(f"No launch script found for map: {target_map_name}")
         
         print(f"Launching new AirSim process with script: {script_path}")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=3', f'-settings="{self.settings_path}"'] # 注意GPU的选择
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=0', f'-settings="{self.settings_path}"'] # 注意GPU的选择
         self.airsim_process = subprocess.Popen(launch_command,start_new_session=True)
         self.current_map_name = target_map_name
         self._connect_to_airsim()
@@ -244,13 +251,13 @@ class AirSimDroneEnv(gym.Env):
 
     def _compute_reward(self,terminated, attraction_reward=0.0, exploration_reward=0.0):
         # Reward weights
-        W_ATTRACTION = 0.003
-        W_EXPLORATION = 0.04
-        W_DISTANCE = 1.5
+        W_ATTRACTION = 0.01
+        W_EXPLORATION = 0.1
+        W_DISTANCE = 3.0
         W_SPARSE = 1.0
         
         # Distance-based reward
-        STEP_PENALTY = -0.5
+        STEP_PENALTY = -1.0
         distance_decrease = self.last_dist_to_target - self.current_dist_to_target
         if 10 <= self.current_dist_to_target < 30:
             k = 2.0
@@ -268,7 +275,7 @@ class AirSimDroneEnv(gym.Env):
             if self.current_dist_to_target < 10.0: # successful termination
                 sparse_reward = 200.0
             else: # failure termination
-                sparse_reward = -200.0
+                sparse_reward = -100.0
             
         # Log
         self.reward_log[0] += W_DISTANCE * dis_reward
@@ -311,20 +318,21 @@ class AirSimDroneEnv(gym.Env):
         initial_observation = self._get_obs()
         
         # Log info
+        log_dir = "uav_search/train_logs"
+        os.makedirs(log_dir, exist_ok=True)
+        log_filename = os.path.join(log_dir, f"worker_{self.worker_index}_reset_log.txt")
+        with open(log_filename, 'a') as log_file:
+            log_file.write(f"{datetime.datetime.now()} - Task {self.task_id} ends, dis_mean: {self.log['ep_distance']}, reward_d_mean: {self.log['ep_reward_distance']}, reward_s_mean: {self.log['ep_reward_sparse']}, reward_a_mean: {self.log['ep_reward_attraction']}, reward_e_mean: {self.log['ep_reward_exploration']}\n")
         self.reward_log = [0,0,0,0]
         self.distance_sum = 0.0
-        info = {
+        self.log = {
             "ep_distance": 0.0,
             "ep_reward_distance": 0.0,
             "ep_reward_sparse": 0.0,
             "ep_reward_attraction": 0.0,
             "ep_reward_exploration": 0.0
         }
-        log_dir = "uav_search/train_logs"
-        os.makedirs(log_dir, exist_ok=True)
-        log_filename = os.path.join(log_dir, f"worker_{self.worker_index}_reset_log.txt")
-        with open(log_filename, 'a') as log_file:
-            log_file.write(f"{datetime.datetime.now()} - Task {self.task_id} ends\n")
+        info = self.log
 
         # 每个task训练10个episode
         self.episode_id += 1
@@ -420,13 +428,14 @@ class AirSimDroneEnv(gym.Env):
                 attraction_reward, exploration_reward = 0.0, 0.0
                 observation = self._get_obs()
                 # Log info
-                info = {
-                    "ep_distance_mean": self.current_dist_to_target / self.episode_step_count,
-                    "ep_reward_distance_mean": self.reward_log[0] / self.episode_step_count,
-                    "ep_reward_sparse_mean": self.reward_log[1] / self.episode_step_count,
-                    "ep_reward_attraction_mean": self.reward_log[2] / self.episode_step_count,
-                    "ep_reward_exploration_mean": self.reward_log[3] / self.episode_step_count
+                self.log = {
+                    "ep_distance": self.current_dist_to_target / self.episode_step_count,
+                    "ep_reward_distance": self.reward_log[0] / self.episode_step_count,
+                    "ep_reward_sparse": self.reward_log[1] / self.episode_step_count,
+                    "ep_reward_attraction": self.reward_log[2] / self.episode_step_count,
+                    "ep_reward_exploration": self.reward_log[3] / self.episode_step_count
                 }
+                info = self.log
             
             reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
         

@@ -153,9 +153,9 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
         exploration_distance_weights = (REWARD_DISTANCE_THRESHOLD - nearby_distances) / REWARD_DISTANCE_THRESHOLD
 
         rewards = np.zeros_like(nearby_distances)
-        positive_mask = existing_exploration_values < 1.0
+        positive_mask = existing_exploration_values < 0.4
         rewards[positive_mask] = positive_gain * exploration_distance_weights[positive_mask]
-        negative_mask = existing_exploration_values > 1.0
+        negative_mask = existing_exploration_values > 0.4
         rewards[negative_mask] = -negative_gain * exploration_distance_weights[negative_mask]
 
         exploration_reward = np.sum(rewards)

@@ -12,7 +12,7 @@ detection_box_threshold = 0.3
 detection_text_threshold = 0.65
 
 def detection_test(processor, model, pil_image, depth_image, camera_info, camera_position, camera_orientation, object_name) :
-    device = "cuda:0" 
+    device = "cuda:7" 
     warnings.filterwarnings("ignore")  # 关闭所有警告
 
     processor = processor
@@ -43,7 +43,7 @@ def detection_test(processor, model, pil_image, depth_image, camera_info, camera
 
     matched_indices = [i for i, label in enumerate(result["labels"]) if label.lower() == target_label]
     if not matched_indices:
-        print(f"[Detection] No detection made with label '{target_label}'.")
+        #print(f"[Detection] No detection made with label '{target_label}'.")
         return None
     max_score_idx = matched_indices[result["scores"][matched_indices].argmax().item()]
 

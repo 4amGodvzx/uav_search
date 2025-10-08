@@ -32,8 +32,8 @@
 11. (Done)Warning: Logical error in exploration map updating
 12. (Done)Warning: The error in trace_rays_vectorized()
 13. Problem about the deciding LLM : episodical hallucination
-14. Curriculum learning
-15. Warning: Set the timeout time of airsim api in test code
+14. (not so neccesary)Curriculum learning
+15. (Done)Warning: Set the timeout time of airsim api in test code
 16. Warning: The uav prefers to get more attraction reward rather than reach the target quickly
 17. Warning: The attraction reward scale is different in different maps
 18. More training logs
