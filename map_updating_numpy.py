@@ -31,11 +31,11 @@ def downsample_masks(masks, scale_factor):
 
 import numpy as np
 
-def exploration_rate(distance: np.ndarray, max_depth=200, decay_factor=5) -> np.ndarray:
+def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=5, gain=2.0) -> np.ndarray:
     rates = np.where(
         distance > max_depth, 
         0.0, 
-        np.exp(-decay_factor * (distance / max_depth))
+        np.exp(-decay_factor * (distance / max_depth)) * gain
     )
     return rates
 
@@ -176,7 +176,7 @@ def map_update(attraction_map, exploration_map, prepared_masks, attraction_score
     grid_centers_world = (traversed_grids_indices + 0.5) * grid_size + map_origin
     distances_to_grids = np.linalg.norm(grid_centers_world - drone_world_pos, axis=1)
 
-    rates = exploration_rate(distances_to_grids, max_depth=200, decay_factor=5)
+    rates = exploration_rate(distances_to_grids, max_depth=50, decay_factor=5, gain=2.0)
 
     gx, gy, gz = traversed_grids_indices.T # .T是转置，得到三个 (M,) 的数组
     current_rates = exploration_map[gx, gy, gz]

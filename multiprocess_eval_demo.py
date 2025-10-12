@@ -84,7 +84,7 @@ def action_process_func(shared_maps, shared_detection_info, shared_maps_history,
         camera_fov = 90
         
         with data_lock:
-            obstacle_map_copy = np.frombuffer(shared_maps['obstacle_map_buffer'], dtype=np.uint8).reshape(80, 80, 20)
+            obstacle_map_copy = np.frombuffer(shared_maps['obstacle_map_buffer'], dtype=np.uint8).reshape(40, 40, 10)
         
         new_obstacle_map = obstacle_update(obstacle_map_copy, start_position, depth_image, camera_fov, camera_position, camera_orientation)
         

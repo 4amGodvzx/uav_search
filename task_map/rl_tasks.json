@@ -131,7 +131,7 @@
         "object_name": "Bench",
         "difficulty": "Medium",
         "description": "Geometric seating structure, brown wooden slats with black metal frame, slatted backrest and seat, public resting function.",
-        "start_position": [-292.0,170.0,-7.0],
+        "start_position": [-292.0,-170.0,-7.0],
         "object_position": [-274.0,-154.0,1.0]
     },
     {

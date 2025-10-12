@@ -4,11 +4,11 @@ import math
 from uav_search.to_map_test import to_map_xyz
 from uav_search.to_map_numpy import depth_image_to_world_points
 
-def exploration_rate(distance: np.ndarray, max_depth=200, decay_factor=5) -> np.ndarray:
+def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=5, gain=2.0) -> np.ndarray:
     rates = np.where(
         distance > max_depth, 
         0.0, 
-        np.exp(-decay_factor * (distance / max_depth))
+        np.exp(-decay_factor * (distance / max_depth)) * gain
     )
     return rates
 
@@ -64,46 +64,57 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     map_size = np.array([200.0, 200.0, 50.0])  # 地图尺寸 (meters)
     grid_size = np.array([5.0, 5.0, 5.0])      # 网格尺寸 (meters)
     map_resolution = (map_size / grid_size).astype(int)  # 地图分辨率 [40, 40, 10]
-    obstacle_grid_size = np.array([2.5, 2.5, 2.5])
+    obstacle_grid_size = np.array([5.0, 5.0, 5.0])
     obstacle_map_resolution = (map_size / obstacle_grid_size).astype(int)
     
     
-    REWARD_DISTANCE_THRESHOLD = 50.0 # 奖励计算的最大距离
+    REWARD_DISTANCE_THRESHOLD = 30.0 # 奖励计算的最大距离
     KEY_THRESHOLD = 0.9 # 关键兴趣点的阈值
-    KEY_REWARD = 10.0 # 关键兴趣点的额外奖励    
+    KEY_REWARD = 5.0 # 关键兴趣点的额外奖励    
 
     # 计算地图原点在世界坐标系中的位置 (start_position 是地图的中心)
     start_pos_np = start_position.to_numpy_array()
     map_origin = start_pos_np - map_size / 2.0
     
-    attraction_reward = 0.0
-    
+    observed_grids = {}
+
     for v in range(image_shape[0]):
         for u in range(image_shape[1]):
             depth = depth_image[v, u]
             if depth >= 250:
                 continue
-    
+
             world_coords = to_map_xyz(v, u, depth, image_shape, camera_fov, camera_position, camera_orientation)
             map_coords = world_coords - map_origin
-            grid_indices = (map_coords / grid_size).astype(int)
+            grid_indices = tuple((map_coords / grid_size).astype(int))
             gx, gy, gz = grid_indices
             obstacle_grid_indices = (map_coords / obstacle_grid_size).astype(int)
-            gx_o, gy_o, gz_o = obstacle_grid_indices
+            gx_o, gy_o, gz_o = obstacle_grid_indices            
 
             if 0 <= gx_o < obstacle_map_resolution[0] and 0 <= gy_o < obstacle_map_resolution[1] and 0 <= gz_o < obstacle_map_resolution[2]:
                 new_obstacle_map[gx_o, gy_o, gz_o] = 1.0  # 标记为障碍物
 
-            # 边界检查
             if 0 <= gx < map_resolution[0] and 0 <= gy < map_resolution[1] and 0 <= gz < map_resolution[2]:
-                new_attraction_map[gx, gy, gz, 0] = current_ground_truth_attraction_map[gx, gy, gz]
-                
-                # 计算兴趣奖励
-                if depth < REWARD_DISTANCE_THRESHOLD:
-                    attraction_distance_weights = (REWARD_DISTANCE_THRESHOLD - depth) / REWARD_DISTANCE_THRESHOLD
-                    attraction_reward += attraction_map[gx, gy, gz, 0] * attraction_distance_weights
-                    if attraction_map[gx, gy, gz, 0] >= KEY_THRESHOLD:
-                        attraction_reward += KEY_REWARD * attraction_distance_weights
+                if grid_indices not in observed_grids or depth < observed_grids[grid_indices]:
+                    observed_grids[grid_indices] = depth
+    
+    attraction_reward = 0.0
+    exploration_reward = 0.0
+    
+    if not observed_grids:
+        return new_attraction_map, new_exploration_map, new_obstacle_map, attraction_reward, exploration_reward
+
+    for grid_indices, min_depth in observed_grids.items():
+        gx, gy, gz = grid_indices
+
+        ground_truth_value = current_ground_truth_attraction_map[gx, gy, gz]
+        new_attraction_map[gx, gy, gz, 0] = ground_truth_value
+
+        if min_depth < REWARD_DISTANCE_THRESHOLD:
+            attraction_distance_weights = (REWARD_DISTANCE_THRESHOLD - min_depth) / REWARD_DISTANCE_THRESHOLD
+            attraction_reward += ground_truth_value * attraction_distance_weights
+            if ground_truth_value >= KEY_THRESHOLD:
+                attraction_reward += KEY_REWARD * attraction_distance_weights
                 
     add_exploration_map = np.zeros_like(exploration_map)
     drone_world_pos = camera_position.to_numpy_array()
@@ -126,7 +137,6 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     )
     
     # 计算探索奖励
-    exploration_reward = 0.0
     
     if traversed_grids_indices.shape[0] == 0:
         exploration_reward = 0.0
@@ -135,9 +145,6 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     # 计算所有这些栅格到无人机的距离
     grid_centers_world = (traversed_grids_indices + 0.5) * grid_size + map_origin
     distances_to_grids = np.linalg.norm(grid_centers_world - drone_world_pos, axis=1)
- 
-    positive_gain = 1.0  # 探索未知区域的基础奖励增益
-    negative_gain = 1.0  # 重复探索已知区域的基础惩罚增益
 
     nearby_mask = distances_to_grids < REWARD_DISTANCE_THRESHOLD
 
@@ -154,13 +161,13 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
 
         rewards = np.zeros_like(nearby_distances)
         positive_mask = existing_exploration_values < 0.4
-        rewards[positive_mask] = positive_gain * exploration_distance_weights[positive_mask]
+        rewards[positive_mask] = exploration_distance_weights[positive_mask]
         negative_mask = existing_exploration_values > 0.4
-        rewards[negative_mask] = -negative_gain * exploration_distance_weights[negative_mask]
+        rewards[negative_mask] = - exploration_distance_weights[negative_mask]
 
         exploration_reward = np.sum(rewards)
 
-    rates = exploration_rate(distances_to_grids, max_depth=200, decay_factor=5)
+    rates = exploration_rate(distances_to_grids, max_depth=50, decay_factor=5, gain=2.0)
 
     gx, gy, gz = traversed_grids_indices.T # .T是转置，得到三个 (M,) 的数组
     current_rates = exploration_map[gx, gy, gz]

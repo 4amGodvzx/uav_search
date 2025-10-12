@@ -36,7 +36,7 @@
 15. (Done)Warning: Set the timeout time of airsim api in test code
 16. Warning: The uav prefers to get more attraction reward rather than reach the target quickly
 17. Warning: The attraction reward scale is different in different maps
-18. More training logs
+18. (Done)More training logs
 19. (not neccesary)EvalCallBack()
 20. (Done) Catastrophic forgetting in RL training
 
@@ -64,6 +64,7 @@
     - attraction/exploration map grid size
     - the rule to attraction map replacement
     - exploration map max depth/decay rate
+    - exploration map gain
     - (Optional) the forgetting factor of exploration map
 4. api_test.py
     - MLLM system prompt
@@ -94,7 +95,7 @@
     - data input policy
         - environment number
         - episodes per task
-        - curriculum policy
+    - curriculum policy
     - max steps per task in training   
     - training policy and hyperparameters
     - policy model structure and hyperparameters

@@ -8,8 +8,8 @@ def obstacle_update(obstacle_map, start_position, depth_image, camera_fov, camer
     
     # 地图参数
     map_size = np.array([200.0, 200.0, 50.0])  # 地图尺寸 (meters)
-    grid_size = np.array([2.5, 2.5, 2.5])      # 网格尺寸 (meters)
-    map_resolution = (map_size / grid_size).astype(int)  # 地图分辨率 [80, 80, 20]
+    grid_size = np.array([5.0, 5.0, 5.0])      # 网格尺寸 (meters)
+    map_resolution = (map_size / grid_size).astype(int)  # 地图分辨率 [40, 40, 10]
 
     # 计算地图原点在世界坐标系中的位置 (start_position 是地图的中心)
     start_pos_np = start_position.to_numpy_array()
@@ -83,11 +83,10 @@ def map_input_preparation(attraction_map, exploration_map, obstacle_map, uav_pos
         orientation=orientation
     )
 
-    obstacle_center_coords = position * 2
     obstacle_map_input = _crop_rotate_and_pad(
         full_map=obstacle_map,
-        center_coords=obstacle_center_coords,
-        crop_size=(40, 40, 8),
+        center_coords=position,
+        crop_size=(8, 8, 4),
         padding_value=1.0,
         orientation=orientation
     )
@@ -102,7 +101,6 @@ def map_input_preparation(attraction_map, exploration_map, obstacle_map, uav_pos
 '''
 original_shape_attraction = (40, 40, 10, 2)
 original_shape_exploration = (40, 40, 10)
-original_shape_obstacle = (80, 80, 20)
 
 uav_pose = {
     'position': [5, 5, 7],

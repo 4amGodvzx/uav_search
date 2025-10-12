@@ -8,7 +8,9 @@ import os
 import airsim
 import numpy as np
 from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection, SamModel, SamProcessor
-from stable_baselines3 import DQN
+from stable_baselines3 import PPO
+from stable_baselines3.common.vec_env import VecNormalize
+from gymnasium import spaces
 
 from uav_search.airsim_utils import get_images
 from uav_search.grounded_sam_test import grounded_sam
@@ -17,19 +19,45 @@ from uav_search.detection_test import detection_test
 from uav_search.action_model_inputs_test import obstacle_update, map_input_preparation
 
 # --- 配置常量 ---
-DEVICE = "cuda:7"
+DEVICE = "cuda:4"
 DINO_MODEL_DIR = "models/models-grounding-dino-base"
 SAM_MODEL_DIR = "models/models-sam-vit-base"
-ACTION_MODEL_PATH = "uav_search/checkpoints/dqn_num_1_60000_steps.zip"
+ACTION_MODEL_PATH = "uav_search/checkpoints/ppo_num_1_300000_steps.zip"
+STATS_PATH = "uav_search/models/vec_normalize_ppo_num_2.pkl"
 
 # 地图和栅格化参数
 GRID_SCALE = 5.0
 ATTRACTION_MAP_SIZE = (40, 40, 10)
-OBSTACLE_MAP_SIZE = (80, 80, 20)
+OBSTACLE_MAP_SIZE = (40, 40, 10)
 UAV_START_GRID_POS = np.array([20, 20, 5])
+
+# 观测与动作空间
+OBSERVATION_SPACE = spaces.Dict({
+            "attraction_map_input": spaces.Box(low=0, high=1, shape=(10, 20, 20), dtype=np.float32),
+            "exploration_map_input": spaces.Box(low=0, high=1000, shape=(10, 20, 20), dtype=np.float32),
+            "obstacle_map_input": spaces.Box(low=0, high=1, shape=(4, 8, 8), dtype=np.float32)
+        })
+ACTION_SPACE = spaces.Discrete(6)
 
 # 动作定义
 YAW_ANGLES = [0, -90, 180, 90]  # North, West, South, East
+
+# 模拟 VecEnv
+class MockVecEnv:
+    def __init__(self, observation_space, action_space):
+        self.observation_space = observation_space
+        self.action_space = action_space
+        self.num_envs = 1
+
+    def step(self, actions):
+        raise NotImplementedError
+
+
+    def reset(self):
+        raise NotImplementedError
+
+    def close(self):
+        pass
 
 class UAVSearchAgent:
     def __init__(self, start_position: airsim.Vector3r, target_position: airsim.Vector3r, object_name: str, object_description: str, log_dir="experiment_logs"):
@@ -122,11 +150,14 @@ class UAVSearchAgent:
         uav_pose = {'position': UAV_START_GRID_POS, 'orientation': 0}
         path_length = 0.0
         
-        action_model = DQN.load(ACTION_MODEL_PATH, device=DEVICE)
+        action_model = PPO.load(ACTION_MODEL_PATH, device=DEVICE)
+        mock_env = MockVecEnv(OBSERVATION_SPACE, ACTION_SPACE)
+        vec_normalize_object = VecNormalize.load(STATS_PATH, mock_env)
+        vec_normalize_object.training = False
+        vec_normalize_object.norm_reward = False
         print("[Action] Initialize complete.")
 
-        for i in range(50): # Max steps
-            step_start_time = time.time()
+        for i in range(80): # Max steps
             log_entry = {'step': i, 'timestamp': step_start_time}
 
             with self.detection_lock:
@@ -152,6 +183,8 @@ class UAVSearchAgent:
             _, depth_image, camera_position, camera_orientation, _, _ = get_images(action_client)
             camera_fov = 90
             
+            
+            step_start_time = time.time()
             with self.data_lock:
                 obstacle_map_copy = np.frombuffer(self.shared_maps['obstacle_map_buffer'], dtype=np.float32).reshape(OBSTACLE_MAP_SIZE)
             
@@ -163,9 +196,11 @@ class UAVSearchAgent:
                 exploration_map_copy = np.frombuffer(self.shared_maps['exploration_map_buffer'], dtype=np.float32).reshape(ATTRACTION_MAP_SIZE)
             
             action_model_input = map_input_preparation(attraction_map_copy, exploration_map_copy, new_obstacle_map, uav_pose)
-            action, _ = action_model.predict(action_model_input, deterministic=True)
+            normalized_obs = vec_normalize_object.normalize_obs(action_model_input)
+            action, _ = action_model.predict(normalized_obs, deterministic=True)
             action = int(action)
 
+            log_entry['step_duration'] = time.time() - step_start_time
             log_entry['uav_pose_before_action'] = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in uav_pose.items()}
             log_entry['action_taken'] = action
 
@@ -216,7 +251,6 @@ class UAVSearchAgent:
                 termination_reason = "out_of_bounds"
 
             log_entry['uav_pose_after_action'] = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in uav_pose.items()}
-            log_entry['step_duration'] = time.time() - step_start_time
             dis_to_target = np.linalg.norm(np.array([position.x_val,position.y_val,position.z_val]) - np.array([self.target_position.x_val, self.target_position.y_val, self.target_position.z_val]))
             log_entry['dis_to_target'] = dis_to_target
             log_entry['oracle_success'] = True if dis_to_target < 10.0 else False
@@ -239,7 +273,6 @@ class UAVSearchAgent:
         self.experiment_data.append({'total_path_length': path_length})
 
     def _detection_process(self):
-        time.sleep(5) # Ensure AirSim is ready
         detection_dino_processor = AutoProcessor.from_pretrained(DINO_MODEL_DIR)
         detection_dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(DINO_MODEL_DIR).to(DEVICE)
         print("[Detection] Models loaded.")
@@ -268,7 +301,7 @@ class UAVSearchAgent:
                         self.experiment_data.append({
                             'event': 'target_detected',
                             'timestamp': time.time(),
-                            'detected_position': list(point_world)
+                            'detected_position': point_world.tolist()
                         })
 
             print(f"[Detection] Cycle {k} Done.")
@@ -434,7 +467,7 @@ class ExperimentRunner:
         
         # 启动新的AirSim进程
         print(f"Launching new AirSim process for map '{target_map_name}'...")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=7']
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=4']
         self.airsim_process = subprocess.Popen(launch_command, start_new_session=True)
         self.current_map_name = target_map_name
         
@@ -534,7 +567,7 @@ if __name__ == "__main__":
     }
 
     # 2. 定义任务配置文件的路径
-    TASKS_JSON_PATH = "uav_search/task_map/val_tasks.json"
+    TASKS_JSON_PATH = "uav_search/task_map/val_tasks_1.json"
     
     # 3. 定义日志保存的根目录
     BASE_LOG_DIR = "all_experiment_logs"

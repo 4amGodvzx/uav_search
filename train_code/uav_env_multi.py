@@ -31,7 +31,7 @@ class AirSimDroneEnv(gym.Env):
         self.observation_space = spaces.Dict({
             "attraction_map_input": spaces.Box(low=0, high=1, shape=(10, 20, 20), dtype=np.float32),
             "exploration_map_input": spaces.Box(low=0, high=1000, shape=(10, 20, 20), dtype=np.float32),
-            "obstacle_map_input": spaces.Box(low=0, high=1, shape=(8, 40, 40), dtype=np.float32)
+            "obstacle_map_input": spaces.Box(low=0, high=1, shape=(4, 8, 8), dtype=np.float32)
         })
         # AirSim client
         self.worker_index = worker_index
@@ -59,9 +59,17 @@ class AirSimDroneEnv(gym.Env):
             case 1:
                 self.task_id = 4
             case 2:
-                self.task_id = len(self.task_data) - 1
+                self.task_id = 8
             case 3:
-                self.task_id = len(self.task_data) - 5
+                self.task_id = 12
+            case 4:
+                self.task_id = 16
+            case 5:
+                self.task_id = 20
+            case 6:
+                self.task_id = 24
+            case 7:
+                self.task_id = 28
             case _:
                 self.task_id = 0
         self.episode_id = 0
@@ -81,11 +89,14 @@ class AirSimDroneEnv(gym.Env):
         # Log info
         self.log = {
             "ep_distance": 0.0,
+            "ep_step": 0.0,
             "ep_reward_distance": 0.0,
             "ep_reward_sparse": 0.0,
             "ep_reward_attraction": 0.0,
-            "ep_reward_exploration": 0.0
+            "ep_reward_exploration": 0.0,
+            "ep_forward": 0.0
         }
+        self.forward = 0.0
         self.reward_log = [0,0,0,0]
         self.distance_sum = 0.0
         print("AirSim environment initialized.")
@@ -178,7 +189,7 @@ class AirSimDroneEnv(gym.Env):
         self.attraction_map = np.zeros((40, 40, 10, 2), dtype=np.float32)
         self.attraction_map[:, :, :, 1] = -1
         self.exploration_map = np.zeros((40, 40, 10), dtype=np.float32)
-        self.obstacle_map = np.zeros((80, 80, 20), dtype=np.float32)
+        self.obstacle_map = np.zeros((40, 40, 10), dtype=np.float32)
         self.uav_pose = {
             'position': np.array([20, 20, 5]),
             'orientation': 0 # 0: north, 1: west, 2: south, 3: east
@@ -211,7 +222,23 @@ class AirSimDroneEnv(gym.Env):
         self.attraction_map = new_attraction_map
         self.exploration_map = new_exploration_map
         self.obstacle_map = new_obstacle_map
+        
+        # test
+        if self.worker_index == 0:
+            if self.episode_step_count == 20:
+                np.savetxt(f"uav_search/train_map/a_20_{self.task_id}.txt", new_attraction_map.flatten())
+                np.savetxt(f"uav_search/train_map/e_20_{self.task_id}.txt", new_exploration_map.flatten())
+                np.savetxt(f"uav_search/train_map/o_20_{self.task_id}.txt", new_obstacle_map.flatten())
 
+            if self.episode_step_count == 80:
+                np.savetxt(f"uav_search/train_map/a_80_{self.task_id}.txt", new_attraction_map.flatten())
+                np.savetxt(f"uav_search/train_map/e_80_{self.task_id}.txt", new_exploration_map.flatten())
+                np.savetxt(f"uav_search/train_map/o_80_{self.task_id}.txt", new_obstacle_map.flatten())
+            if self.episode_step_count == 150:
+                np.savetxt(f"uav_search/train_map/a_150_{self.task_id}.txt", new_attraction_map.flatten())
+                np.savetxt(f"uav_search/train_map/e_150_{self.task_id}.txt", new_exploration_map.flatten())
+                np.savetxt(f"uav_search/train_map/o_150_{self.task_id}.txt", new_obstacle_map.flatten())
+                
         return attraction_reward, exploration_reward
 
     def _update_uav_pose_from_airsim(self):
@@ -243,21 +270,51 @@ class AirSimDroneEnv(gym.Env):
         self.uav_pose['position'] = grid_position
         self.uav_pose['orientation'] = grid_orientation
 
-    def _get_obs(self):
+    def _get_obs(self, action, attraction_reward, exploration_reward):
         # Get input map
         map_input = map_input_preparation(self.attraction_map, self.exploration_map, self.obstacle_map, self.uav_pose)
 
+        # test
+        if self.worker_index == 0:
+            if self.episode_step_count == 19:
+                with open("uav_search/train_map/p.txt", 'a') as f:
+                    f.write(f"Pose 19: {self.uav_pose}\n")
+            if self.episode_step_count == 20:
+                np.savetxt(f"uav_search/train_map/ai_20_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
+                np.savetxt(f"uav_search/train_map/ei_20_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
+                np.savetxt(f"uav_search/train_map/oi_20_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
+                with open("uav_search/train_map/p.txt", 'a') as f:
+                    f.write(f"Action 20: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
+            if self.episode_step_count == 79:
+                with open("uav_search/train_map/p.txt", 'a') as f:
+                    f.write(f"Pose 79: {self.uav_pose}\n")
+            if self.episode_step_count == 80:
+                np.savetxt(f"uav_search/train_map/ai_80_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
+                np.savetxt(f"uav_search/train_map/ei_80_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
+                np.savetxt(f"uav_search/train_map/oi_80_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
+                with open("uav_search/train_map/p.txt", 'a') as f:
+                    f.write(f"Action 80: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
+            if self.episode_step_count == 149:
+                with open("uav_search/train_map/p.txt", 'a') as f:
+                    f.write(f"Pose 149: {self.uav_pose}\n")
+            if self.episode_step_count == 150:
+                np.savetxt(f"uav_search/train_map/ai_150_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
+                np.savetxt(f"uav_search/train_map/ei_150_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
+                np.savetxt(f"uav_search/train_map/oi_150_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
+                with open("uav_search/train_map/p.txt", 'a') as f:
+                    f.write(f"Action 150: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
+ 
         return map_input
 
     def _compute_reward(self,terminated, attraction_reward=0.0, exploration_reward=0.0):
         # Reward weights
-        W_ATTRACTION = 0.01
-        W_EXPLORATION = 0.1
-        W_DISTANCE = 3.0
+        W_ATTRACTION = 0.0
+        W_EXPLORATION = 0.5
+        W_DISTANCE = 0.0
         W_SPARSE = 1.0
+        STEP_PENALTY = 0.0
         
         # Distance-based reward
-        STEP_PENALTY = -1.0
         distance_decrease = self.last_dist_to_target - self.current_dist_to_target
         if 10 <= self.current_dist_to_target < 30:
             k = 2.0
@@ -268,14 +325,14 @@ class AirSimDroneEnv(gym.Env):
         else: # >= 150
             k = 0.2
         
-        dis_reward = k * distance_decrease + STEP_PENALTY
+        dis_reward = k * distance_decrease
         
         sparse_reward = 0.0
         if terminated:
             if self.current_dist_to_target < 10.0: # successful termination
-                sparse_reward = 200.0
+                sparse_reward = 0.0
             else: # failure termination
-                sparse_reward = -100.0
+                sparse_reward = -50.0
             
         # Log
         self.reward_log[0] += W_DISTANCE * dis_reward
@@ -283,7 +340,7 @@ class AirSimDroneEnv(gym.Env):
         self.reward_log[2] += W_ATTRACTION * attraction_reward
         self.reward_log[3] += W_EXPLORATION * exploration_reward
 
-        return W_DISTANCE * dis_reward + W_SPARSE * sparse_reward + W_ATTRACTION * attraction_reward + W_EXPLORATION * exploration_reward
+        return W_DISTANCE * dis_reward + W_SPARSE * sparse_reward + W_ATTRACTION * attraction_reward + W_EXPLORATION * exploration_reward + STEP_PENALTY
 
     def reset(self, seed=None, options=None):
         super().reset(seed=seed)
@@ -315,40 +372,33 @@ class AirSimDroneEnv(gym.Env):
 
         # 获取初始观测值
         _, _ = self._map_update()
-        initial_observation = self._get_obs()
+        initial_observation = self._get_obs(-1, 0, 0)
         
         # Log info
         log_dir = "uav_search/train_logs"
         os.makedirs(log_dir, exist_ok=True)
         log_filename = os.path.join(log_dir, f"worker_{self.worker_index}_reset_log.txt")
         with open(log_filename, 'a') as log_file:
-            log_file.write(f"{datetime.datetime.now()} - Task {self.task_id} ends, dis_mean: {self.log['ep_distance']}, reward_d_mean: {self.log['ep_reward_distance']}, reward_s_mean: {self.log['ep_reward_sparse']}, reward_a_mean: {self.log['ep_reward_attraction']}, reward_e_mean: {self.log['ep_reward_exploration']}\n")
+            log_file.write(f"{datetime.datetime.now()} - Task {self.task_id}, step_cnt: {self.log['ep_step']}, dis_mean: {self.log['ep_distance']}, reward_d_mean: {self.log['ep_reward_distance']}, reward_s: {self.log['ep_reward_sparse']}, reward_a_mean: {self.log['ep_reward_attraction']}, reward_e_mean: {self.log['ep_reward_exploration']}, forward: {self.log['ep_forward']}\n")
         self.reward_log = [0,0,0,0]
         self.distance_sum = 0.0
         self.log = {
             "ep_distance": 0.0,
+            "ep_step": 0.0,
             "ep_reward_distance": 0.0,
             "ep_reward_sparse": 0.0,
             "ep_reward_attraction": 0.0,
-            "ep_reward_exploration": 0.0
+            "ep_reward_exploration": 0.0,
+            "ep_forward": 0.0
         }
+        self.forward = 0.0
         info = self.log
 
         # 每个task训练10个episode
         self.episode_id += 1
         if self.episode_id >= 10:
             self.episode_id = 0
-            match self.worker_index:
-                case 0:
-                    self.task_id = (self.task_id + 1) % len(self.task_data)
-                case 1:
-                    self.task_id = (self.task_id + 1) % len(self.task_data)
-                case 2:
-                    self.task_id = (self.task_id - 1) % len(self.task_data)
-                case 3:
-                    self.task_id = (self.task_id - 1) % len(self.task_data)
-                case _:
-                    self.task_id = (self.task_id + 1) % len(self.task_data)
+            self.task_id = (self.task_id + 1) % len(self.task_data)
 
         return initial_observation, info
 
@@ -370,6 +420,7 @@ class AirSimDroneEnv(gym.Env):
             match action:
                 case 0: 
                     self.client.moveToPositionAsync(new_position.x_val, new_position.y_val, new_position.z_val, 3, timeout_sec=5).join()
+                    self.forward += 1.0
                 case 1:
                     current_orientation_idx = self.uav_pose['orientation']
                     new_orientation_idx = (current_orientation_idx + 1) % 4
@@ -422,26 +473,28 @@ class AirSimDroneEnv(gym.Env):
             
             if not terminated and not truncated:
                 attraction_reward, exploration_reward = self._map_update()
-                observation = self._get_obs()
+                observation = self._get_obs(action, attraction_reward, exploration_reward)
+                reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
                 info = {}
             else:
                 attraction_reward, exploration_reward = 0.0, 0.0
-                observation = self._get_obs()
+                observation = self._get_obs(action, attraction_reward, exploration_reward)
+                reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
                 # Log info
                 self.log = {
-                    "ep_distance": self.current_dist_to_target / self.episode_step_count,
+                    "ep_step": self.episode_step_count,
+                    "ep_distance": self.distance_sum / self.episode_step_count,
                     "ep_reward_distance": self.reward_log[0] / self.episode_step_count,
-                    "ep_reward_sparse": self.reward_log[1] / self.episode_step_count,
+                    "ep_reward_sparse": self.reward_log[1],
                     "ep_reward_attraction": self.reward_log[2] / self.episode_step_count,
-                    "ep_reward_exploration": self.reward_log[3] / self.episode_step_count
+                    "ep_reward_exploration": self.reward_log[3] / self.episode_step_count,
+                    "ep_forward": self.forward
                 }
                 info = self.log
-            
-            reward = self._compute_reward(terminated, attraction_reward, exploration_reward)
         
         except Exception as e:
             print(f"An error occurred during step execution: {e}")
-            observation = self._get_obs()
+            observation = self._get_obs(-1, 0, 0)
             reward = 0.0
             terminated = True
             truncated = False
