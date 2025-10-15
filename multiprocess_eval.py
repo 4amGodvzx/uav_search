@@ -14,7 +14,7 @@ from gymnasium import spaces
 
 from uav_search.airsim_utils import get_images
 from uav_search.grounded_sam_test import grounded_sam
-from uav_search.map_updating_numpy import add_masks, downsample_masks, map_update
+from uav_search.map_updating_numpy import add_masks, downsample_masks, map_update_simple
 from uav_search.detection_test import detection_test
 from uav_search.action_model_inputs_test import obstacle_update, map_input_preparation
 
@@ -343,7 +343,9 @@ class UAVSearchAgent:
 
             added_masks = add_masks(result_dict["masks"])
             prepared_masks = downsample_masks(added_masks, scale_factor=2)
-            new_attraction_map, new_exploration_map, _ = map_update(attraction_map, exploration_map, prepared_masks, attraction_scores, self.start_position, depth_image, camera_fov, camera_position, camera_orientation)
+            state = planning_client.getMultirotorState()
+            uav_pose = self._update_uav_pose_from_airsim(state)
+            new_attraction_map, new_exploration_map, _ = map_update_simple(attraction_map, exploration_map, prepared_masks, attraction_scores, self.start_position, depth_image, camera_fov, camera_position, camera_orientation, uav_pose["orientation"])
 
             with self.data_lock:
                 self.shared_maps['attraction_map_buffer'] = new_attraction_map.tobytes()

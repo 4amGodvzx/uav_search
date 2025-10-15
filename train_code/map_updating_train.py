@@ -4,7 +4,7 @@ import math
 from uav_search.to_map_test import to_map_xyz
 from uav_search.to_map_numpy import depth_image_to_world_points
 
-def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=5, gain=2.0) -> np.ndarray:
+def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=3, gain=10.0) -> np.ndarray:
     rates = np.where(
         distance > max_depth, 
         0.0, 
@@ -70,7 +70,8 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     
     REWARD_DISTANCE_THRESHOLD = 30.0 # 奖励计算的最大距离
     KEY_THRESHOLD = 0.9 # 关键兴趣点的阈值
-    KEY_REWARD = 5.0 # 关键兴趣点的额外奖励    
+    KEY_REWARD = 5.0 # 关键兴趣点的额外奖励
+    RATE_CENTER = 0.4 # 探索奖励零点
 
     # 计算地图原点在世界坐标系中的位置 (start_position 是地图的中心)
     start_pos_np = start_position.to_numpy_array()
@@ -159,15 +160,11 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
         # 距离衰减权重
         exploration_distance_weights = (REWARD_DISTANCE_THRESHOLD - nearby_distances) / REWARD_DISTANCE_THRESHOLD
 
-        rewards = np.zeros_like(nearby_distances)
-        positive_mask = existing_exploration_values < 0.4
-        rewards[positive_mask] = exploration_distance_weights[positive_mask]
-        negative_mask = existing_exploration_values > 0.4
-        rewards[negative_mask] = - exploration_distance_weights[negative_mask]
-
+        rewards = (RATE_CENTER - existing_exploration_values) * exploration_distance_weights
+        
         exploration_reward = np.sum(rewards)
 
-    rates = exploration_rate(distances_to_grids, max_depth=50, decay_factor=5, gain=2.0)
+    rates = exploration_rate(distances_to_grids, max_depth=50, decay_factor=3, gain=10.0)
 
     gx, gy, gz = traversed_grids_indices.T # .T是转置，得到三个 (M,) 的数组
     current_rates = exploration_map[gx, gy, gz]
@@ -175,5 +172,128 @@ def map_update(attraction_map, exploration_map, obstacle_map, current_ground_tru
     add_exploration_map[gx[update_mask], gy[update_mask], gz[update_mask]] = rates[update_mask]
     
     new_exploration_map = exploration_map + add_exploration_map
+
+    return new_attraction_map, new_exploration_map, new_obstacle_map, attraction_reward, exploration_reward
+
+def map_update_simple(attraction_map, exploration_map, obstacle_map, current_ground_truth_attraction_map, start_position, depth_image, camera_fov, camera_position, camera_orientation, ori):
+    image_shape = (depth_image.shape[0], depth_image.shape[1])
+    new_attraction_map = attraction_map.copy()
+    new_exploration_map = exploration_map.copy()
+    new_obstacle_map = obstacle_map.copy()
+    
+    # 地图参数
+    map_size = np.array([200.0, 200.0, 50.0])  # 地图尺寸 (meters)
+    grid_size = np.array([5.0, 5.0, 5.0])      # 网格尺寸 (meters)
+    map_resolution = (map_size / grid_size).astype(int)  # 地图分辨率 [40, 40, 10]
+    obstacle_grid_size = np.array([5.0, 5.0, 5.0])
+    obstacle_map_resolution = (map_size / obstacle_grid_size).astype(int)
+    
+    
+    REWARD_DISTANCE_THRESHOLD = 30.0 # 奖励计算的最大距离
+    KEY_THRESHOLD = 0.9 # 关键兴趣点的阈值
+    KEY_REWARD = 5.0 # 关键兴趣点的额外奖励
+    RATE_CENTER = 0.4 # 探索奖励零点
+
+    # 计算地图原点在世界坐标系中的位置 (start_position 是地图的中心)
+    start_pos_np = start_position.to_numpy_array()
+    map_origin = start_pos_np - map_size / 2.0
+    
+    observed_grids = {}
+
+    for v in range(image_shape[0]):
+        for u in range(image_shape[1]):
+            depth = depth_image[v, u]
+            if depth >= 250:
+                continue
+
+            world_coords = to_map_xyz(v, u, depth, image_shape, camera_fov, camera_position, camera_orientation)
+            map_coords = world_coords - map_origin
+            grid_indices = tuple((map_coords / grid_size).astype(int))
+            gx, gy, gz = grid_indices
+            obstacle_grid_indices = (map_coords / obstacle_grid_size).astype(int)
+            gx_o, gy_o, gz_o = obstacle_grid_indices            
+
+            if 0 <= gx_o < obstacle_map_resolution[0] and 0 <= gy_o < obstacle_map_resolution[1] and 0 <= gz_o < obstacle_map_resolution[2]:
+                new_obstacle_map[gx_o, gy_o, gz_o] = 1.0  # 标记为障碍物
+
+            if 0 <= gx < map_resolution[0] and 0 <= gy < map_resolution[1] and 0 <= gz < map_resolution[2]:
+                if grid_indices not in observed_grids or depth < observed_grids[grid_indices]:
+                    observed_grids[grid_indices] = depth
+    
+    attraction_reward = 0.0
+    exploration_reward = 0.0
+    
+    if not observed_grids:
+        return new_attraction_map, new_exploration_map, new_obstacle_map, attraction_reward, exploration_reward
+
+    for grid_indices, min_depth in observed_grids.items():
+        gx, gy, gz = grid_indices
+
+        ground_truth_value = current_ground_truth_attraction_map[gx, gy, gz]
+        new_attraction_map[gx, gy, gz, 0] = ground_truth_value
+
+        if min_depth < REWARD_DISTANCE_THRESHOLD:
+            attraction_distance_weights = (REWARD_DISTANCE_THRESHOLD - min_depth) / REWARD_DISTANCE_THRESHOLD
+            attraction_reward += ground_truth_value * attraction_distance_weights
+            if ground_truth_value >= KEY_THRESHOLD:
+                attraction_reward += KEY_REWARD * attraction_distance_weights
+                
+    VIEW_DEPTH = 50.0   # 视线距离
+    VIEW_HEIGHT = 20.0  # 垂直视野高度
+    EXPLORATION_GAIN = 1.0 # 每次观测，探索值增加的基础量
+
+    drone_world_pos = camera_position.to_numpy_array().flatten()
+
+    # 2. 获取地图中所有栅格的索引和世界坐标中心点
+    # 使用 np.indices 高效生成所有栅格的索引
+    indices_x, indices_y, indices_z = np.indices(map_resolution)
+    all_indices = np.stack([indices_x.ravel(), indices_y.ravel(), indices_z.ravel()], axis=-1)
+    all_centers_world = (all_indices + 0.5) * grid_size + map_origin
+
+    # 3. 筛选出在三角柱体视锥内的栅格
+    relative_coords = all_centers_world - drone_world_pos
+    rel_x, rel_y, rel_z = relative_coords.T
+
+    # 根据无人机朝向(ori)，将所有栅格旋转到无人机的局部坐标系
+    # local_y 指向前方, local_x 指向左方
+    # ori: 0:N(+y), 1:W(-x), 2:S(-y), 3:E(+x)
+    ori_conditions = [ori == 0, ori == 1, ori == 2, ori == 3]
+    local_x_choices = [rel_x, -rel_y, -rel_x, rel_y]
+    local_y_choices = [rel_y, rel_x, -rel_y, -rel_x]
+    local_x = np.select(ori_conditions, local_x_choices)
+    local_y = np.select(ori_conditions, local_y_choices)
+
+    in_height_mask = np.abs(rel_z) <= VIEW_HEIGHT / 2
+    in_depth_mask = (local_y > 0) & (local_y <= VIEW_DEPTH)
+    in_angle_mask = np.abs(local_x) <= local_y # 90度FOV的核心条件
+    in_prism_mask = in_height_mask & in_depth_mask & in_angle_mask
+
+    # 获取所有被视线穿过的栅格索引
+    traversed_indices_prism = all_indices[in_prism_mask]
+    if traversed_indices_prism.shape[0] > 0:
+        # 4. 计算探索奖励 (逻辑和之前一样，作用于新找到的栅格)
+        distances_to_grids = np.linalg.norm(relative_coords[in_prism_mask], axis=1)
+        nearby_mask = distances_to_grids < REWARD_DISTANCE_THRESHOLD
+
+        if np.any(nearby_mask):
+            nearby_indices = traversed_indices_prism[nearby_mask]
+            nearby_distances = distances_to_grids[nearby_mask]
+
+            gx, gy, gz = nearby_indices.T
+            existing_exploration_values = exploration_map[gx, gy, gz]
+
+            distance_weights = (REWARD_DISTANCE_THRESHOLD - nearby_distances) / REWARD_DISTANCE_THRESHOLD
+            rewards = (RATE_CENTER - existing_exploration_values) * distance_weights
+            exploration_reward = np.sum(rewards)
+
+        # 5. 更新探索地图
+        # 计算探索值的增加量，距离越近增加越多
+        gx, gy, gz = traversed_indices_prism.T
+        distances_for_update = np.linalg.norm(relative_coords[in_prism_mask], axis=1)
+
+        # 距离越远，增加量越小 (线性衰减)
+        exploration_increase = (1 - distances_for_update / VIEW_DEPTH) * EXPLORATION_GAIN
+
+        new_exploration_map[gx, gy, gz] += exploration_increase
 
     return new_attraction_map, new_exploration_map, new_obstacle_map, attraction_reward, exploration_reward

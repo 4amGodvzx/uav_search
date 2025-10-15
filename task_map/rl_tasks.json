@@ -248,7 +248,7 @@
         "object_name": "Fountain",
         "difficulty": "Simple",
         "description": "Geometric circular form, light gray stone with carved floral motifs, tiered basins with central water spout, ornamental structure used for water display in public or garden spaces.",
-        "start_position": [27.0,35.0,-10.0],
+        "start_position": [27.0,35.0,-14.0],
         "object_position": [40.0,16.0,1.0]
     },
     {
@@ -284,7 +284,7 @@
         "object_name": "SignPost",
         "difficulty": "Medium",
         "description": "Vertical post with perpendicular flat boards, weathered wood texture, directional arrow-shaped signs with faded text, used for navigation or wayfinding.",
-        "start_position": [-21.0,26.0,-10.0],
+        "start_position": [-21.0,26.0,-12.0],
         "object_position": [-21.0,10.0,1.0]
     },
     {

@@ -19,10 +19,10 @@ os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 os.makedirs(checkpoint_dir, exist_ok=True)
 
-vec_normalize_stats_path = os.path.join(model_dir, "vec_normalize_ppo_num_2.pkl")
+vec_normalize_stats_path = os.path.join(model_dir, "vec_normalize_ppo_num_3.pkl")
 
 if __name__ == '__main__':
-    num_cpu = 6
+    num_cpu = 8
     base_port = 41451
 
     def make_env(rank, seed=0):
@@ -37,7 +37,7 @@ if __name__ == '__main__':
     
     vec_env = VecNormalize(vec_env, norm_obs=True, norm_reward=True, gamma=0.99)
 
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir,name_prefix='ppo_num_2')
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir, name_prefix='ppo_num_3', save_vecnormalize=True)
 
     model = PPO('MultiInputPolicy', vec_env, verbose=1, tensorboard_log=log_dir,device="cuda:0")
 
@@ -48,14 +48,14 @@ if __name__ == '__main__':
             total_timesteps=TIMESTEPS,
             reset_num_timesteps=False,
             log_interval=1,
-            tb_log_name="ppo_num_2",
+            tb_log_name="ppo_num_3",
             callback=checkpoint_callback
         )
-        model.save(f"{model_dir}/ppo_num_2_final_{TIMESTEPS}")
+        model.save(f"{model_dir}/ppo_num_3_final_{TIMESTEPS}")
         vec_env.save(vec_normalize_stats_path)
     except KeyboardInterrupt:
         print("Training interrupted by user. Saving model...")
-        model.save(f"{model_dir}/ppo_num_2_interrupted_{model.num_timesteps}")
+        model.save(f"{model_dir}/ppo_num_3_interrupted_{model.num_timesteps}")
         vec_env.save(vec_normalize_stats_path)
     finally:
         vec_env.close()

@@ -31,7 +31,7 @@ def downsample_masks(masks, scale_factor):
 
 import numpy as np
 
-def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=5, gain=2.0) -> np.ndarray:
+def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=3, gain=10.0) -> np.ndarray:
     rates = np.where(
         distance > max_depth, 
         0.0, 
@@ -145,11 +145,8 @@ def map_update(attraction_map, exploration_map, prepared_masks, attraction_score
             winner_object_id = Counter(object_ids).most_common(1)[0][0]
             winning_score = attraction_scores[winner_object_id]
             new_attraction_map[gx, gy, gz, 0] = winning_score
-
-    # --- 2. 更新探索图 (Exploration Map) ---
     
     add_exploration_map = np.zeros_like(exploration_map)
-    observed_points_cnt = 0 # Only used for trainning
     drone_world_pos = camera_position.to_numpy_array()
 
     # 过滤掉无效深度值
@@ -170,13 +167,13 @@ def map_update(attraction_map, exploration_map, prepared_masks, attraction_score
     )
 
     if traversed_grids_indices.shape[0] == 0:
-        return new_attraction_map, new_exploration_map, observed_points_cnt
+        return new_attraction_map, new_exploration_map, 0
     
     # 计算所有这些栅格到无人机的距离
     grid_centers_world = (traversed_grids_indices + 0.5) * grid_size + map_origin
     distances_to_grids = np.linalg.norm(grid_centers_world - drone_world_pos, axis=1)
 
-    rates = exploration_rate(distances_to_grids, max_depth=50, decay_factor=5, gain=2.0)
+    rates = exploration_rate(distances_to_grids, max_depth=50, decay_factor=3, gain=10.0)
 
     gx, gy, gz = traversed_grids_indices.T # .T是转置，得到三个 (M,) 的数组
     current_rates = exploration_map[gx, gy, gz]
@@ -187,4 +184,120 @@ def map_update(attraction_map, exploration_map, prepared_masks, attraction_score
     # Hyperparameter: 遗忘因子
     # new_exploration_map *= 0.95
 
-    return new_attraction_map, new_exploration_map, observed_points_cnt
+    return new_attraction_map, new_exploration_map, 0
+
+def map_update_simple(attraction_map, exploration_map, prepared_masks, attraction_scores, start_position, depth_image, camera_fov, camera_position, camera_orientation, ori):
+    depth_image = depth_image
+    camera_fov = camera_fov
+    image_shape = (depth_image.shape[0], depth_image.shape[1])
+    
+    new_attraction_map = attraction_map.copy()
+    new_exploration_map = exploration_map.copy()
+
+    # 地图参数
+    map_size = np.array([200.0, 200.0, 50.0])  # 地图尺寸 (meters)
+    grid_size = np.array([5.0, 5.0, 5.0])      # 网格尺寸 (meters)
+    map_resolution = (map_size / grid_size).astype(int)  # 地图分辨率 [40, 40, 10]
+
+    # 计算地图原点在世界坐标系中的位置 (start_position 是地图的中心)
+    start_pos_np = start_position.to_numpy_array()
+    map_origin = start_pos_np - map_size / 2.0
+
+    # --- 1. 更新吸引力图 (Attraction Map) ---
+
+    # 步骤 1.1: 收集所有掩码像素点对地图网格的贡献
+    # 字典的键是网格索引 (gx, gy, gz)，值是 (深度, 对象ID) 的列表
+    grid_contributions = defaultdict(list)
+
+    for object_id, mask in enumerate(prepared_masks):
+        if mask is None:
+            continue
+
+        # 获取掩码为 True 的所有像素坐标
+        pixels_v, pixels_u = np.where(mask)
+
+        for v, u in zip(pixels_v, pixels_u):
+            depth = depth_image[v, u]
+            if depth >= 250:  # 只处理有效深度范围内的点
+                continue
+
+            # 将像素坐标转换为世界坐标
+            world_coords = to_map_xyz(v, u, depth, image_shape, camera_fov, camera_position, camera_orientation)
+
+            # 将世界坐标转换为地图坐标，再转换为网格索引
+            map_coords = world_coords - map_origin
+            grid_indices = (map_coords / grid_size).astype(int)
+            gx, gy, gz = grid_indices
+
+            # 边界检查，确保网格索引在地图范围内
+            if 0 <= gx < map_resolution[0] and 0 <= gy < map_resolution[1] and 0 <= gz < map_resolution[2]:
+                grid_contributions[(gx, gy, gz)].append((depth, object_id))
+
+    # 步骤 1.2: 根据收集到的贡献点，更新每个网格的深度和吸引力分数
+    for (gx, gy, gz), points_list in grid_contributions.items():
+        if not points_list:
+            continue
+
+        # --- 深度更新 ---
+        # 找到当前帧所有贡献到此网格的点中的最小深度
+        min_depth_in_frame = min(p[0] for p in points_list)
+        
+        # 与地图中存储的旧深度比较
+        stored_depth = attraction_map[gx, gy, gz, 1]
+        if min_depth_in_frame < stored_depth or stored_depth < 0:
+            new_attraction_map[gx, gy, gz, 1] = min_depth_in_frame
+
+        # --- 吸引力分数更新 (投票) ---
+        # 统计哪个对象ID在此网格中出现的次数最多
+        object_ids = [p[1] for p in points_list]
+        if object_ids:
+            # Counter(...).most_common(1) 返回 [(元素, 次数)] 形式的列表
+            winner_object_id = Counter(object_ids).most_common(1)[0][0]
+            winning_score = attraction_scores[winner_object_id]
+            new_attraction_map[gx, gy, gz, 0] = winning_score
+    
+    VIEW_DEPTH = 50.0   # 视线距离
+    VIEW_HEIGHT = 20.0  # 垂直视野高度
+    EXPLORATION_GAIN = 1.0 # 每次观测，探索值增加的基础量
+
+    drone_world_pos = camera_position.to_numpy_array().flatten()
+
+    # 2. 获取地图中所有栅格的索引和世界坐标中心点
+    # 使用 np.indices 高效生成所有栅格的索引
+    indices_x, indices_y, indices_z = np.indices(map_resolution)
+    all_indices = np.stack([indices_x.ravel(), indices_y.ravel(), indices_z.ravel()], axis=-1)
+    all_centers_world = (all_indices + 0.5) * grid_size + map_origin
+
+    # 3. 筛选出在三角柱体视锥内的栅格
+    relative_coords = all_centers_world - drone_world_pos
+    rel_x, rel_y, rel_z = relative_coords.T
+
+    # 根据无人机朝向(ori)，将所有栅格旋转到无人机的局部坐标系
+    # local_y 指向前方, local_x 指向左方
+    # ori: 0:N(+y), 1:W(-x), 2:S(-y), 3:E(+x)
+    ori_conditions = [ori == 0, ori == 1, ori == 2, ori == 3]
+    local_x_choices = [rel_x, -rel_y, -rel_x, rel_y]
+    local_y_choices = [rel_y, rel_x, -rel_y, -rel_x]
+    local_x = np.select(ori_conditions, local_x_choices)
+    local_y = np.select(ori_conditions, local_y_choices)
+
+    in_height_mask = np.abs(rel_z) <= VIEW_HEIGHT / 2
+    in_depth_mask = (local_y > 0) & (local_y <= VIEW_DEPTH)
+    in_angle_mask = np.abs(local_x) <= local_y # 90度FOV的核心条件
+    in_prism_mask = in_height_mask & in_depth_mask & in_angle_mask
+
+    # 获取所有被视线穿过的栅格索引
+    traversed_indices_prism = all_indices[in_prism_mask]
+    if traversed_indices_prism.shape[0] > 0:
+        # 计算探索值的增加量，距离越近增加越多
+        gx, gy, gz = traversed_indices_prism.T
+        distances_for_update = np.linalg.norm(relative_coords[in_prism_mask], axis=1)
+
+        # 距离越远，增加量越小 (线性衰减)
+        exploration_increase = (1 - distances_for_update / VIEW_DEPTH) * EXPLORATION_GAIN
+
+        new_exploration_map[gx, gy, gz] += exploration_increase
+    # Hyperparameter: 遗忘因子
+    # new_exploration_map *= 0.95
+
+    return new_attraction_map, new_exploration_map, 0

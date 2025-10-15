@@ -12,7 +12,7 @@ import datetime
 
 from uav_search.airsim_utils import get_train_images
 from uav_search.action_model_inputs_test import map_input_preparation
-from uav_search.train_code.map_updating_train import map_update
+from uav_search.train_code.map_updating_train import map_update_simple
 
 
 
@@ -78,7 +78,7 @@ class AirSimDroneEnv(gym.Env):
         self.start_orientation = airsim.utils.to_quaternion(0, 0, 0)
         self.target_position = np.array([0.0, 0.0, 0.0])
         self.episode_step_count = 0
-        self.max_steps_per_episode = 200 # 每回合最大步数
+        self.max_steps_per_episode = 100 # 每回合最大步数
         # Map
         self._map_reset()
         self.grid_size = 5.0
@@ -207,7 +207,7 @@ class AirSimDroneEnv(gym.Env):
         depth_image, camera_position, camera_orientation = get_train_images(self.client)
         camera_fov = 90
 
-        new_attraction_map, new_exploration_map, new_obstacle_map, attraction_reward, exploration_reward = map_update(
+        new_attraction_map, new_exploration_map, new_obstacle_map, attraction_reward, exploration_reward = map_update_simple(
             self.attraction_map,
             self.exploration_map,
             self.obstacle_map,
@@ -216,7 +216,8 @@ class AirSimDroneEnv(gym.Env):
             depth_image,
             camera_fov,
             camera_position,
-            camera_orientation
+            camera_orientation,
+            self.uav_pose["orientation"]
         )
             
         self.attraction_map = new_attraction_map
@@ -278,7 +279,7 @@ class AirSimDroneEnv(gym.Env):
         if self.worker_index == 0:
             if self.episode_step_count == 19:
                 with open("uav_search/train_map/p.txt", 'a') as f:
-                    f.write(f"Pose 19: {self.uav_pose}\n")
+                    f.write(f"Task{self.task_id} Pose 19: {self.uav_pose} ")
             if self.episode_step_count == 20:
                 np.savetxt(f"uav_search/train_map/ai_20_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
                 np.savetxt(f"uav_search/train_map/ei_20_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
@@ -287,7 +288,7 @@ class AirSimDroneEnv(gym.Env):
                     f.write(f"Action 20: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
             if self.episode_step_count == 79:
                 with open("uav_search/train_map/p.txt", 'a') as f:
-                    f.write(f"Pose 79: {self.uav_pose}\n")
+                    f.write(f"Task{self.task_id} Pose 79: {self.uav_pose} ")
             if self.episode_step_count == 80:
                 np.savetxt(f"uav_search/train_map/ai_80_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
                 np.savetxt(f"uav_search/train_map/ei_80_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
@@ -296,7 +297,7 @@ class AirSimDroneEnv(gym.Env):
                     f.write(f"Action 80: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
             if self.episode_step_count == 149:
                 with open("uav_search/train_map/p.txt", 'a') as f:
-                    f.write(f"Pose 149: {self.uav_pose}\n")
+                    f.write(f"Task{self.task_id} Pose 149: {self.uav_pose} ")
             if self.episode_step_count == 150:
                 np.savetxt(f"uav_search/train_map/ai_150_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
                 np.savetxt(f"uav_search/train_map/ei_150_{self.task_id}.txt", map_input["exploration_map_input"].flatten())

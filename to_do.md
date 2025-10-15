@@ -34,11 +34,12 @@
 13. Problem about the deciding LLM : episodical hallucination
 14. (not so neccesary)Curriculum learning
 15. (Done)Warning: Set the timeout time of airsim api in test code
-16. Warning: The uav prefers to get more attraction reward rather than reach the target quickly
-17. Warning: The attraction reward scale is different in different maps
+16. (Done)Warning: The uav prefers to get more attraction reward rather than reach the target quickly
+17. (Done)Warning: The attraction reward scale is different in different maps
 18. (Done)More training logs
 19. (not neccesary)EvalCallBack()
 20. (Done) Catastrophic forgetting in RL training
+21. Whole test for Reward shaping
 
 # The Policies
 1. Map input: Relative location (Alt: absolute location)
@@ -101,3 +102,11 @@
     - policy model structure and hyperparameters
 
 - Warning: RGB image size must be 2 times the depth image size
+
+# Reward Shape testing
+
+1. ppo_num_3:
+- TIMESTEPS=300000, max_steps = 100
+- REWARD_DISTANCE_THRESHOLD = 30.0 KEY_THRESHOLD = 0.9 KEY_REWARD = 5.0 RATE_CENTER = 0.4
+- VIEW_DEPTH = 50.0 VIEW_HEIGHT = 20.0 EXPLORATION_GAIN = 1.0
+- W_ATTRACTION = 0.0, W_EXPLORATION = 0.5, W_DISTANCE = 0.0, W_SPARSE = 1.0, STEP_PENALTY = 0.0, ,success reward = 0.0, termination_reward = -50.0
