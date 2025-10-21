@@ -22,7 +22,7 @@ os.makedirs(checkpoint_dir, exist_ok=True)
 vec_normalize_stats_path = os.path.join(model_dir, "vec_normalize_ppo_num_3.pkl")
 
 if __name__ == '__main__':
-    num_cpu = 8
+    num_cpu = 4
     base_port = 41451
 
     def make_env(rank, seed=0):
@@ -39,7 +39,7 @@ if __name__ == '__main__':
 
     checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir, name_prefix='ppo_num_3', save_vecnormalize=True)
 
-    model = PPO('MultiInputPolicy', vec_env, verbose=1, tensorboard_log=log_dir,device="cuda:0")
+    model = PPO('MultiInputPolicy', vec_env, verbose=1, tensorboard_log=log_dir,device="cuda:5")
 
     TIMESTEPS = 300000
 

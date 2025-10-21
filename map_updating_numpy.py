@@ -256,7 +256,7 @@ def map_update_simple(attraction_map, exploration_map, prepared_masks, attractio
             winning_score = attraction_scores[winner_object_id]
             new_attraction_map[gx, gy, gz, 0] = winning_score
     
-    VIEW_DEPTH = 50.0   # 视线距离
+    VIEW_DEPTH = 30.0   # 视线距离
     VIEW_HEIGHT = 20.0  # 垂直视野高度
     EXPLORATION_GAIN = 1.0 # 每次观测，探索值增加的基础量
 
@@ -273,11 +273,9 @@ def map_update_simple(attraction_map, exploration_map, prepared_masks, attractio
     rel_x, rel_y, rel_z = relative_coords.T
 
     # 根据无人机朝向(ori)，将所有栅格旋转到无人机的局部坐标系
-    # local_y 指向前方, local_x 指向左方
-    # ori: 0:N(+y), 1:W(-x), 2:S(-y), 3:E(+x)
     ori_conditions = [ori == 0, ori == 1, ori == 2, ori == 3]
-    local_x_choices = [rel_x, -rel_y, -rel_x, rel_y]
-    local_y_choices = [rel_y, rel_x, -rel_y, -rel_x]
+    local_x_choices = [-rel_y, -rel_x, rel_y, rel_x]
+    local_y_choices = [rel_x, -rel_y, -rel_x, rel_y]
     local_x = np.select(ori_conditions, local_x_choices)
     local_y = np.select(ori_conditions, local_y_choices)
 
@@ -292,6 +290,7 @@ def map_update_simple(attraction_map, exploration_map, prepared_masks, attractio
         # 计算探索值的增加量，距离越近增加越多
         gx, gy, gz = traversed_indices_prism.T
         distances_for_update = np.linalg.norm(relative_coords[in_prism_mask], axis=1)
+        distances_for_update = np.clip(distances_for_update, 0, VIEW_DEPTH)
 
         # 距离越远，增加量越小 (线性衰减)
         exploration_increase = (1 - distances_for_update / VIEW_DEPTH) * EXPLORATION_GAIN

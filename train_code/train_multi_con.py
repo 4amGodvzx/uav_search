@@ -19,12 +19,13 @@ os.makedirs(log_dir, exist_ok=True)
 os.makedirs(model_dir, exist_ok=True)
 os.makedirs(checkpoint_dir, exist_ok=True)
 
-vec_normalize_stats_path = os.path.join(model_dir, "vec_normalize_ppo_num_3.pkl")
+vec_normalize_stats_path = os.path.join(model_dir, "f_ppo_num_3_interrupted_230232.pkl")
+vec_normalize_final_path = os.path.join(model_dir, "f_ppo_num_3_final.pkl")
 
-model_to_load = os.path.join(model_dir, "ppo_num_3_interrupted_5528.zip")
+model_to_load = os.path.join(model_dir, "f_ppo_num_3_interrupted_230232.zip")
 
 if __name__ == '__main__':
-    num_cpu = 6
+    num_cpu = 4
     base_port = 41451
 
     def make_env(rank, seed=0):
@@ -41,27 +42,27 @@ if __name__ == '__main__':
     vec_env.training = True
     print(f"Successfully loaded VecNormalize stats from {vec_normalize_stats_path}")
 
-    model = PPO.load(model_to_load, env=vec_env, device="cuda:0", tensorboard_log=log_dir)
+    model = PPO.load(model_to_load, env=vec_env, device="cuda:7", tensorboard_log=log_dir)
     print(f"Successfully loaded model from {model_to_load}")
 
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir, name_prefix='ppo_num_3', save_vecnormalize=True)
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir, name_prefix='f_ppo_num_3', save_vecnormalize=True)
 
-    TOTAL_TIMESTEPS = 300000
+    TOTAL_TIMESTEPS = 400000
 
     try:
         model.learn(
             total_timesteps=TOTAL_TIMESTEPS,
             reset_num_timesteps=False, 
             log_interval=1,
-            tb_log_name="ppo_num_3",
+            tb_log_name="f_ppo_num_3",
             callback=checkpoint_callback
         )
-        model.save(f"{model_dir}/ppo_num_3_final_{TOTAL_TIMESTEPS}")
-        vec_env.save(vec_normalize_stats_path)
+        model.save(f"{model_dir}/f_ppo_num_3_final_{TOTAL_TIMESTEPS}")
+        vec_env.save(vec_normalize_final_path)
     except KeyboardInterrupt:
         print("Training interrupted by user. Saving model...")
-        model.save(f"{model_dir}/ppo_num_3_interrupted_{model.num_timesteps}")
-        vec_env.save(vec_normalize_stats_path)
+        model.save(f"{model_dir}/f_ppo_num_3_interrupted_{model.num_timesteps}")
+        vec_env.save(os.path.join(model_dir, f"f_ppo_num_3_interrupted_{model.num_timesteps}.pkl"))
         print("Model and VecNormalize stats saved.")
     finally:
         vec_env.close()

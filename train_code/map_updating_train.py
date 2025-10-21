@@ -192,7 +192,6 @@ def map_update_simple(attraction_map, exploration_map, obstacle_map, current_gro
     REWARD_DISTANCE_THRESHOLD = 30.0 # 奖励计算的最大距离
     KEY_THRESHOLD = 0.9 # 关键兴趣点的阈值
     KEY_REWARD = 5.0 # 关键兴趣点的额外奖励
-    RATE_CENTER = 0.4 # 探索奖励零点
 
     # 计算地图原点在世界坐标系中的位置 (start_position 是地图的中心)
     start_pos_np = start_position.to_numpy_array()
@@ -238,9 +237,10 @@ def map_update_simple(attraction_map, exploration_map, obstacle_map, current_gro
             if ground_truth_value >= KEY_THRESHOLD:
                 attraction_reward += KEY_REWARD * attraction_distance_weights
                 
-    VIEW_DEPTH = 50.0   # 视线距离
+    VIEW_DEPTH = 30.0   # 视线距离
     VIEW_HEIGHT = 20.0  # 垂直视野高度
-    EXPLORATION_GAIN = 1.0 # 每次观测，探索值增加的基础量
+    RATE_CENTER = 0.4 # 探索奖励零点
+    EXPLORATION_GAIN = 0.5 # 每次观测，探索值增加的基础量
 
     drone_world_pos = camera_position.to_numpy_array().flatten()
 
@@ -255,11 +255,9 @@ def map_update_simple(attraction_map, exploration_map, obstacle_map, current_gro
     rel_x, rel_y, rel_z = relative_coords.T
 
     # 根据无人机朝向(ori)，将所有栅格旋转到无人机的局部坐标系
-    # local_y 指向前方, local_x 指向左方
-    # ori: 0:N(+y), 1:W(-x), 2:S(-y), 3:E(+x)
     ori_conditions = [ori == 0, ori == 1, ori == 2, ori == 3]
-    local_x_choices = [rel_x, -rel_y, -rel_x, rel_y]
-    local_y_choices = [rel_y, rel_x, -rel_y, -rel_x]
+    local_x_choices = [-rel_y, -rel_x, rel_y, rel_x]
+    local_y_choices = [rel_x, -rel_y, -rel_x, rel_y]
     local_x = np.select(ori_conditions, local_x_choices)
     local_y = np.select(ori_conditions, local_y_choices)
 
@@ -290,6 +288,7 @@ def map_update_simple(attraction_map, exploration_map, obstacle_map, current_gro
         # 计算探索值的增加量，距离越近增加越多
         gx, gy, gz = traversed_indices_prism.T
         distances_for_update = np.linalg.norm(relative_coords[in_prism_mask], axis=1)
+        distances_for_update = np.clip(distances_for_update, 0, VIEW_DEPTH)
 
         # 距离越远，增加量越小 (线性衰减)
         exploration_increase = (1 - distances_for_update / VIEW_DEPTH) * EXPLORATION_GAIN

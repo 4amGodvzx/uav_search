@@ -166,7 +166,7 @@ class AirSimDroneEnv(gym.Env):
             raise ValueError(f"No launch script found for map: {target_map_name}")
         
         print(f"Launching new AirSim process with script: {script_path}")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=0', f'-settings="{self.settings_path}"'] # 注意GPU的选择
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=7', f'-settings="{self.settings_path}"'] # 注意GPU的选择
         self.airsim_process = subprocess.Popen(launch_command,start_new_session=True)
         self.current_map_name = target_map_name
         self._connect_to_airsim()
@@ -225,6 +225,7 @@ class AirSimDroneEnv(gym.Env):
         self.obstacle_map = new_obstacle_map
         
         # test
+        '''
         if self.worker_index == 0:
             if self.episode_step_count == 20:
                 np.savetxt(f"uav_search/train_map/a_20_{self.task_id}.txt", new_attraction_map.flatten())
@@ -239,7 +240,7 @@ class AirSimDroneEnv(gym.Env):
                 np.savetxt(f"uav_search/train_map/a_150_{self.task_id}.txt", new_attraction_map.flatten())
                 np.savetxt(f"uav_search/train_map/e_150_{self.task_id}.txt", new_exploration_map.flatten())
                 np.savetxt(f"uav_search/train_map/o_150_{self.task_id}.txt", new_obstacle_map.flatten())
-                
+        '''        
         return attraction_reward, exploration_reward
 
     def _update_uav_pose_from_airsim(self):
@@ -277,31 +278,31 @@ class AirSimDroneEnv(gym.Env):
 
         # test
         if self.worker_index == 0:
-            if self.episode_step_count == 19:
-                with open("uav_search/train_map/p.txt", 'a') as f:
-                    f.write(f"Task{self.task_id} Pose 19: {self.uav_pose} ")
+            #if self.episode_step_count == 19:
+                #with open("uav_search/train_map/p.txt", 'a') as f:
+                    #f.write(f"Task{self.task_id} Pose 19: {self.uav_pose} ")
             if self.episode_step_count == 20:
-                np.savetxt(f"uav_search/train_map/ai_20_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
-                np.savetxt(f"uav_search/train_map/ei_20_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
-                np.savetxt(f"uav_search/train_map/oi_20_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/ai_20_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/ei_20_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/oi_20_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
                 with open("uav_search/train_map/p.txt", 'a') as f:
                     f.write(f"Action 20: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
-            if self.episode_step_count == 79:
-                with open("uav_search/train_map/p.txt", 'a') as f:
-                    f.write(f"Task{self.task_id} Pose 79: {self.uav_pose} ")
+            #if self.episode_step_count == 79:
+                #with open("uav_search/train_map/p.txt", 'a') as f:
+                    #f.write(f"Task{self.task_id} Pose 79: {self.uav_pose} ")
             if self.episode_step_count == 80:
-                np.savetxt(f"uav_search/train_map/ai_80_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
-                np.savetxt(f"uav_search/train_map/ei_80_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
-                np.savetxt(f"uav_search/train_map/oi_80_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/ai_80_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/ei_80_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/oi_80_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
                 with open("uav_search/train_map/p.txt", 'a') as f:
                     f.write(f"Action 80: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
-            if self.episode_step_count == 149:
-                with open("uav_search/train_map/p.txt", 'a') as f:
-                    f.write(f"Task{self.task_id} Pose 149: {self.uav_pose} ")
+            #if self.episode_step_count == 149:
+                #with open("uav_search/train_map/p.txt", 'a') as f:
+                    #f.write(f"Task{self.task_id} Pose 149: {self.uav_pose} ")
             if self.episode_step_count == 150:
-                np.savetxt(f"uav_search/train_map/ai_150_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
-                np.savetxt(f"uav_search/train_map/ei_150_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
-                np.savetxt(f"uav_search/train_map/oi_150_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/ai_150_{self.task_id}.txt", map_input["attraction_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/ei_150_{self.task_id}.txt", map_input["exploration_map_input"].flatten())
+                #np.savetxt(f"uav_search/train_map/oi_150_{self.task_id}.txt", map_input["obstacle_map_input"].flatten())
                 with open("uav_search/train_map/p.txt", 'a') as f:
                     f.write(f"Action 150: {int(action)}, Pose: {self.uav_pose}, reward_a: {attraction_reward}, reward_e: {exploration_reward}\n")
  
@@ -309,8 +310,8 @@ class AirSimDroneEnv(gym.Env):
 
     def _compute_reward(self,terminated, attraction_reward=0.0, exploration_reward=0.0):
         # Reward weights
-        W_ATTRACTION = 0.0
-        W_EXPLORATION = 0.5
+        W_ATTRACTION = 1.0
+        W_EXPLORATION = 0.2
         W_DISTANCE = 0.0
         W_SPARSE = 1.0
         STEP_PENALTY = 0.0
@@ -331,7 +332,7 @@ class AirSimDroneEnv(gym.Env):
         sparse_reward = 0.0
         if terminated:
             if self.current_dist_to_target < 10.0: # successful termination
-                sparse_reward = 0.0
+                sparse_reward = 50.0
             else: # failure termination
                 sparse_reward = -50.0
             
