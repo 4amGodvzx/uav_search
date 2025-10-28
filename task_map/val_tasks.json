@@ -1,6 +1,7 @@
 [
     {
         "task_id": 0,
+        "geodesic_distance": 81,
         "map": "BrushifyUrban",
         "object_name": "Forklift",
         "difficulty": "Medium",
@@ -18,6 +19,7 @@
     },
     {
         "task_id": 1,
+        "geodesic_distance": 74,
         "map": "BrushifyUrban",
         "object_name": "Human",
         "difficulty": "Medium",
@@ -35,6 +37,7 @@
     },
     {
         "task_id": 2,
+        "geodesic_distance": 65,
         "map": "BrushifyUrban",
         "object_name": "VendingMachine",
         "difficulty": "Medium",
@@ -52,6 +55,7 @@
     },
     {
         "task_id": 3,
+        "geodesic_distance": 27,
         "map": "BrushifyUrban",
         "object_name": "Sandbox",
         "difficulty": "Medium",
@@ -69,6 +73,7 @@
     },
     {
         "task_id": 4,
+        "geodesic_distance": 80,
         "map": "BrushifyUrban",
         "object_name": "PlaygroundSet",
         "difficulty": "Medium",
@@ -86,6 +91,7 @@
     },
     {
         "task_id": 5,
+        "geodesic_distance": 60,
         "map": "BrushifyUrban",
         "object_name": "Flag",
         "difficulty": "Medium",
@@ -103,6 +109,7 @@
     },
     {
         "task_id": 6,
+        "geodesic_distance": 34,
         "map": "BrushifyUrban",
         "object_name": "Fountain",
         "difficulty": "Medium",
@@ -120,6 +127,7 @@
     },
     {
         "task_id": 7,
+        "geodesic_distance": 64,
         "map": "BrushifyUrban",
         "object_name": "Umbrella",
         "difficulty": "Medium",
@@ -137,6 +145,7 @@
     },
     {
         "task_id": 8,
+        "geodesic_distance": 50,
         "map": "BrushifyUrban",
         "object_name": "Table",
         "difficulty": "Medium",
@@ -154,6 +163,7 @@
     },
     {
         "task_id": 9,
+        "geodesic_distance": 52,
         "map": "BrushifyUrban",
         "object_name": "Chair",
         "difficulty": "Medium",
@@ -171,6 +181,7 @@
     },
     {
         "task_id": 10,
+        "geodesic_distance": 43,
         "map": "CabinLake",
         "object_name": "Human",
         "difficulty": "Medium",
@@ -188,6 +199,7 @@
     },
     {
         "task_id": 11,
+        "geodesic_distance": 70,
         "map": "CabinLake",
         "object_name": "Boat",
         "difficulty": "Medium",
@@ -205,6 +217,7 @@
     },
     {
         "task_id": 12,
+        "geodesic_distance": 47,
         "map": "CabinLake",
         "object_name": "PicnicTable",
         "difficulty": "Medium",
@@ -222,6 +235,7 @@
     },
     {
         "task_id": 13,
+        "geodesic_distance": 82,
         "map": "CabinLake",
         "object_name": "Surfboard",
         "difficulty": "Medium",
@@ -239,6 +253,7 @@
     },
     {
         "task_id": 14,
+        "geodesic_distance": 51,
         "map": "CabinLake",
         "object_name": "Table",
         "difficulty": "Medium",
@@ -256,6 +271,7 @@
     },
     {
         "task_id": 15,
+        "geodesic_distance": 89,
         "map": "CabinLake",
         "object_name": "Dumpster",
         "difficulty": "Medium",
@@ -273,6 +289,7 @@
     },
     {
         "task_id": 16,
+        "geodesic_distance": 69,
         "map": "CabinLake",
         "object_name": "TrashCan",
         "difficulty": "Medium",
@@ -290,6 +307,7 @@
     },
     {
         "task_id": 17,
+        "geodesic_distance": 49,
         "map": "CabinLake",
         "object_name": "StatueDeer",
         "difficulty": "Medium",
@@ -307,6 +325,7 @@
     },
     {
         "task_id": 18,
+        "geodesic_distance": 77,
         "map": "CabinLake",
         "object_name": "StreetSign",
         "difficulty": "Medium",
@@ -324,6 +343,7 @@
     },
     {
         "task_id": 19,
+        "geodesic_distance": 42,
         "map": "CabinLake",
         "object_name": "Tarp",
         "difficulty": "Medium",
@@ -342,6 +362,7 @@
     {
         "task_id": 20,
         "map": "DownTown",
+        "geodesic_distance": 77,
         "object_name": "Grill",
         "difficulty": "Medium",
         "description": " Geometric cylindrical form on four thin legs, matte black metal surface with open-lid design, compact structure indicating function as an outdoor charcoal or gas barbecue.",
@@ -358,13 +379,14 @@
     },
     {
         "task_id": 21,
+        "geodesic_distance": 46,
         "map": "DownTown",
         "object_name": "Tent",
         "difficulty": "Medium",
         "description": " Geometric dome shape, dark blue synthetic fabric with yellow frame supports, taut surface texture and ground anchoring cords, designed for temporary outdoor shelter.",
         "start_position": [
-                -3.0338790231653547,
-                42.92520331549281,
+                14.432487528482682,
+                18.628639447498784,
                 -10.0
             ],
         "object_position": [
@@ -375,6 +397,7 @@
     },
     {
         "task_id": 22,
+        "geodesic_distance": 72,
         "map": "DownTown",
         "object_name": "Cart",
         "difficulty": "Medium",
@@ -392,6 +415,7 @@
     },
     {
         "task_id": 23,
+        "geodesic_distance": 58,
         "map": "DownTown",
         "object_name": "Trailer",
         "difficulty": "Medium",
@@ -409,6 +433,7 @@
     },
     {
         "task_id": 24,
+        "geodesic_distance": 23,
         "map": "DownTown",
         "object_name": "Mailbox",
         "difficulty": "Medium",
@@ -426,6 +451,7 @@
     },
     {
         "task_id": 25,
+        "geodesic_distance": 30,
         "map": "DownTown",
         "object_name": "Piano",
         "difficulty": "Medium",
@@ -443,6 +469,7 @@
     },
     {
         "task_id": 26,
+        "geodesic_distance": 37,
         "map": "DownTown",
         "object_name": "PicnicTable",
         "difficulty": "Medium",
@@ -460,6 +487,7 @@
     },
     {
         "task_id": 27,
+        "geodesic_distance": 38,
         "map": "DownTown",
         "object_name": "GrainSilo",
         "difficulty": "Medium",
@@ -477,6 +505,7 @@
     },
     {
         "task_id": 28,
+        "geodesic_distance": 75,
         "map": "DownTown",
         "object_name": "Playscape",
         "difficulty": "Medium",
@@ -494,6 +523,7 @@
     },
     {
         "task_id": 29,
+        "geodesic_distance": 33,
         "map": "DownTown",
         "object_name": "DumpTruck",
         "difficulty": "Medium",
@@ -511,6 +541,7 @@
     },
     {
         "task_id": 30,
+        "geodesic_distance": 60,
         "map": "Neighborhood",
         "object_name": "Statue",
         "difficulty": "Medium",
@@ -528,6 +559,7 @@
     },
     {
         "task_id": 31,
+        "geodesic_distance": 26,
         "map": "Neighborhood",
         "object_name": "Campervan",
         "difficulty": "Medium",
@@ -545,6 +577,7 @@
     },
     {
         "task_id": 32,
+        "geodesic_distance": 33,
         "map": "Neighborhood",
         "object_name": "Blanket",
         "difficulty": "Medium",
@@ -562,6 +595,7 @@
     },
     {
         "task_id": 33,
+        "geodesic_distance": 46,
         "map": "Neighborhood",
         "object_name": "Playground",
         "difficulty": "Medium",
@@ -579,6 +613,7 @@
     },
     {
         "task_id": 34,
+        "geodesic_distance": 23,
         "map": "Neighborhood",
         "object_name": "Excavator",
         "difficulty": "Medium",
@@ -596,6 +631,7 @@
     },
     {
         "task_id": 35,
+        "geodesic_distance": 28,
         "map": "Neighborhood",
         "object_name": "Lifering",
         "difficulty": "Medium",
@@ -613,6 +649,7 @@
     },
     {
         "task_id": 36,
+        "geodesic_distance": 42,
         "map": "Neighborhood",
         "object_name": "Chair",
         "difficulty": "Medium",
@@ -630,6 +667,7 @@
     },
     {
         "task_id": 37,
+        "geodesic_distance": 36,
         "map": "Neighborhood",
         "object_name": "Fountain",
         "difficulty": "Medium",
@@ -647,6 +685,7 @@
     },
     {
         "task_id": 38,
+        "geodesic_distance": 18,
         "map": "Neighborhood",
         "object_name": "Barrier",
         "difficulty": "Medium",
@@ -664,6 +703,7 @@
     },
     {
         "task_id": 39,
+        "geodesic_distance": 59,
         "map": "Neighborhood",
         "object_name": "Car",
         "difficulty": "Medium",
@@ -681,6 +721,7 @@
     },
     {
         "task_id": 40,
+        "geodesic_distance": 21,
         "map": "Slum",
         "object_name": "WoodenBox",
         "difficulty": "Medium",
@@ -698,6 +739,7 @@
     },
     {
         "task_id": 41,
+        "geodesic_distance": 45,
         "map": "Slum",
         "object_name": "Bottles",
         "difficulty": "Medium",
@@ -715,6 +757,7 @@
     },
     {
         "task_id": 42,
+        "geodesic_distance": 32,
         "map": "Slum",
         "object_name": "SatDish",
         "difficulty": "Medium",
@@ -732,6 +775,7 @@
     },
     {
         "task_id": 43,
+        "geodesic_distance": 29,
         "map": "Slum",
         "object_name": "GrainSilo",
         "difficulty": "Medium",
@@ -749,6 +793,7 @@
     },
     {
         "task_id": 44,
+        "geodesic_distance": 26,
         "map": "Slum",
         "object_name": "Hose",
         "difficulty": "Medium",
@@ -766,6 +811,7 @@
     },
     {
         "task_id": 45,
+        "geodesic_distance": 51,
         "map": "Slum",
         "object_name": "SignPost",
         "difficulty": "Medium",
@@ -783,6 +829,7 @@
     },
     {
         "task_id": 46,
+        "geodesic_distance": 14,
         "map": "Slum",
         "object_name": "Apple",
         "difficulty": "Medium",
@@ -800,6 +847,7 @@
     },
     {
         "task_id": 47,
+        "geodesic_distance": 23,
         "map": "Slum",
         "object_name": "Crate",
         "difficulty": "Medium",
@@ -817,6 +865,7 @@
     },
     {
         "task_id": 48,
+        "geodesic_distance": 40,
         "map": "Slum",
         "object_name": "Tractor",
         "difficulty": "Medium",
@@ -834,6 +883,7 @@
     },
     {
         "task_id": 49,
+        "geodesic_distance": 20,
         "map": "Slum",
         "object_name": "Elephant",
         "difficulty": "Medium",
@@ -851,6 +901,7 @@
     },
     {
         "task_id": 50,
+        "geodesic_distance": 26,
         "map": "UrbanJapan",
         "object_name": "Manhole",
         "difficulty": "Medium",
@@ -868,6 +919,7 @@
     },
     {
         "task_id": 51,
+        "geodesic_distance": 25,
         "map": "UrbanJapan",
         "object_name": "Human",
         "difficulty": "Medium",
@@ -885,6 +937,7 @@
     },
     {
         "task_id": 52,
+        "geodesic_distance": 14,
         "map": "UrbanJapan",
         "object_name": "ElectricBox",
         "difficulty": "Medium",
@@ -902,6 +955,7 @@
     },
     {
         "task_id": 53,
+        "geodesic_distance": 49,
         "map": "UrbanJapan",
         "object_name": "Dumpster",
         "difficulty": "Medium",
@@ -919,6 +973,7 @@
     },
     {
         "task_id": 54,
+        "geodesic_distance": 8,
         "map": "UrbanJapan",
         "object_name": "Bicycle",
         "difficulty": "Medium",
@@ -936,6 +991,7 @@
     },
     {
         "task_id": 55,
+        "geodesic_distance": 41,
         "map": "UrbanJapan",
         "object_name": "FoodCart",
         "difficulty": "Medium",
@@ -953,6 +1009,7 @@
     },
     {
         "task_id": 56,
+        "geodesic_distance": 25,
         "map": "UrbanJapan",
         "object_name": "RecycleBin",
         "difficulty": "Medium",
@@ -970,6 +1027,7 @@
     },
     {
         "task_id": 57,
+        "geodesic_distance": 54,
         "map": "UrbanJapan",
         "object_name": "Truck",
         "difficulty": "Medium",
@@ -987,6 +1045,7 @@
     },
     {
         "task_id": 58,
+        "geodesic_distance": 55,
         "map": "UrbanJapan",
         "object_name": "Car",
         "difficulty": "Medium",
@@ -1004,6 +1063,7 @@
     },
     {
         "task_id": 59,
+        "geodesic_distance": 33,
         "map": "UrbanJapan",
         "object_name": "Sculpture",
         "difficulty": "Medium",
@@ -1021,6 +1081,7 @@
     },
     {
         "task_id": 60,
+        "geodesic_distance": 50,
         "map": "Venice",
         "object_name": "Cloth",
         "difficulty": "Medium",
@@ -1038,6 +1099,7 @@
     },
     {
         "task_id": 61,
+        "geodesic_distance": 27,
         "map": "Venice",
         "object_name": "Stump",
         "difficulty": "Medium",
@@ -1055,6 +1117,7 @@
     },
     {
         "task_id": 62,
+        "geodesic_distance": 63,
         "map": "Venice",
         "object_name": "Grill",
         "difficulty": "Medium",
@@ -1072,6 +1135,7 @@
     },
     {
         "task_id": 63,
+        "geodesic_distance": 42,
         "map": "Venice",
         "object_name": "Trailer",
         "difficulty": "Medium",
@@ -1089,6 +1153,7 @@
     },
     {
         "task_id": 64,
+        "geodesic_distance": 23,
         "map": "Venice",
         "object_name": "Firewood",
         "difficulty": "Medium",
@@ -1106,6 +1171,7 @@
     },
     {
         "task_id": 65,
+        "geodesic_distance": 58,
         "map": "Venice",
         "object_name": "Umbrella",
         "difficulty": "Medium",
@@ -1123,6 +1189,7 @@
     },
     {
         "task_id": 66,
+        "geodesic_distance": 18,
         "map": "Venice",
         "object_name": "Tray",
         "difficulty": "Medium",
@@ -1140,6 +1207,7 @@
     },
     {
         "task_id": 67,
+        "geodesic_distance": 30,
         "map": "Venice",
         "object_name": "VendingMachine",
         "difficulty": "Medium",
@@ -1157,6 +1225,7 @@
     },
     {
         "task_id": 68,
+        "geodesic_distance": 39,
         "map": "Venice",
         "object_name": "Statue",
         "difficulty": "Medium",
@@ -1174,6 +1243,7 @@
     },
     {
         "task_id": 69,
+        "geodesic_distance": 60,
         "map": "Venice",
         "object_name": "Church",
         "difficulty": "Medium",
@@ -1191,6 +1261,7 @@
     },
     {
         "task_id": 70,
+        "geodesic_distance": 19,
         "map": "WesternTown",
         "object_name": "Antenna",
         "difficulty": "Medium",
@@ -1208,6 +1279,7 @@
     },
     {
         "task_id": 71,
+        "geodesic_distance": 29,
         "map": "WesternTown",
         "object_name": "GrainSilo",
         "difficulty": "Medium",
@@ -1225,6 +1297,7 @@
     },
     {
         "task_id": 72,
+        "geodesic_distance": 28,
         "map": "WesternTown",
         "object_name": "SiloStructure",
         "difficulty": "Medium",
@@ -1242,6 +1315,7 @@
     },
     {
         "task_id": 73,
+        "geodesic_distance": 29,
         "map": "WesternTown",
         "object_name": "WaterDepot",
         "difficulty": "Medium",
@@ -1259,6 +1333,7 @@
     },
     {
         "task_id": 74,
+        "geodesic_distance": 17,
         "map": "WesternTown",
         "object_name": "HangingCloth",
         "difficulty": "Medium",
@@ -1276,6 +1351,7 @@
     },
     {
         "task_id": 75,
+        "geodesic_distance": 26,
         "map": "WesternTown",
         "object_name": "TreeOld",
         "difficulty": "Medium",
@@ -1293,6 +1369,7 @@
     },
     {
         "task_id": 76,
+        "geodesic_distance": 17,
         "map": "WesternTown",
         "object_name": "SteelLadder",
         "difficulty": "Medium",
@@ -1310,6 +1387,7 @@
     },
     {
         "task_id": 77,
+        "geodesic_distance": 19,
         "map": "WesternTown",
         "object_name": "Piano",
         "difficulty": "Medium",
@@ -1327,6 +1405,7 @@
     },
     {
         "task_id": 78,
+        "geodesic_distance": 15,
         "map": "WesternTown",
         "object_name": "Chair",
         "difficulty": "Medium",
@@ -1344,6 +1423,7 @@
     },
     {
         "task_id": 79,
+        "geodesic_distance": 6,
         "map": "WesternTown",
         "object_name": "CoveredCrate",
         "difficulty": "Medium",
@@ -1361,6 +1441,7 @@
     },
     {
         "task_id": 80,
+        "geodesic_distance": 24,
         "map": "WinterTown",
         "object_name": "Barrel",
         "difficulty": "Medium",
@@ -1378,6 +1459,7 @@
     },
     {
         "task_id": 81,
+        "geodesic_distance": 56,
         "map": "WinterTown",
         "object_name": "BusStop",
         "difficulty": "Medium",
@@ -1395,6 +1477,7 @@
     },
     {
         "task_id": 82,
+        "geodesic_distance": 48,
         "map": "WinterTown",
         "object_name": "SignPost",
         "difficulty": "Medium",
@@ -1412,6 +1495,7 @@
     },
     {
         "task_id": 83,
+        "geodesic_distance": 35,
         "map": "WinterTown",
         "object_name": "FoldedTent",
         "difficulty": "Medium",
@@ -1429,6 +1513,7 @@
     },
     {
         "task_id": 84,
+        "geodesic_distance": 61,
         "map": "WinterTown",
         "object_name": "PoliceCar",
         "difficulty": "Medium",
@@ -1446,6 +1531,7 @@
     },
     {
         "task_id": 85,
+        "geodesic_distance": 90,
         "map": "WinterTown",
         "object_name": "Taxi",
         "difficulty": "Medium",
@@ -1463,6 +1549,7 @@
     },
     {
         "task_id": 86,
+        "geodesic_distance": 43,
         "map": "WinterTown",
         "object_name": "Piano",
         "difficulty": "Medium",
@@ -1480,6 +1567,7 @@
     },
     {
         "task_id": 87,
+        "geodesic_distance": 35,
         "map": "WinterTown",
         "object_name": "WoodTower",
         "difficulty": "Medium",
@@ -1497,6 +1585,7 @@
     },
     {
         "task_id": 88,
+        "geodesic_distance": 40,
         "map": "WinterTown",
         "object_name": "TreeOld",
         "difficulty": "Medium",
@@ -1514,6 +1603,7 @@
     },
     {
         "task_id": 89,
+        "geodesic_distance": 28,
         "map": "WinterTown",
         "object_name": "Fountain",
         "difficulty": "Medium",
@@ -1531,6 +1621,7 @@
     },
     {
         "task_id": 90,
+        "geodesic_distance": 32,
         "map": "Barnyard",
         "object_name": "BusStop",
         "difficulty": "Medium",
@@ -1548,6 +1639,7 @@
     },
     {
         "task_id": 91,
+        "geodesic_distance": 10,
         "map": "Barnyard",
         "object_name": "TrafficLight",
         "difficulty": "Medium",
@@ -1565,6 +1657,7 @@
     },
     {
         "task_id": 92,
+        "geodesic_distance": 41,
         "map": "Barnyard",
         "object_name": "Caravan",
         "difficulty": "Medium",
@@ -1582,6 +1675,7 @@
     },
     {
         "task_id": 93,
+        "geodesic_distance": 60,
         "map": "Barnyard",
         "object_name": "Lantern",
         "difficulty": "Medium",
@@ -1599,6 +1693,7 @@
     },
     {
         "task_id": 94,
+        "geodesic_distance": 32,
         "map": "Barnyard",
         "object_name": "SignStop",
         "difficulty": "Medium",
@@ -1616,6 +1711,7 @@
     },
     {
         "task_id": 95,
+        "geodesic_distance": 60,
         "map": "Barnyard",
         "object_name": "Playground",
         "difficulty": "Medium",
@@ -1633,6 +1729,7 @@
     },
     {
         "task_id": 96,
+        "geodesic_distance": 69,
         "map": "Barnyard",
         "object_name": "Car",
         "difficulty": "Medium",
@@ -1650,6 +1747,7 @@
     },
     {
         "task_id": 97,
+        "geodesic_distance": 24,
         "map": "Barnyard",
         "object_name": "Bull",
         "difficulty": "Medium",
@@ -1667,6 +1765,7 @@
     },
     {
         "task_id": 98,
+        "geodesic_distance": 33,
         "map": "Barnyard",
         "object_name": "Tent",
         "difficulty": "Medium",
@@ -1684,6 +1783,7 @@
     },
     {
         "task_id": 99,
+        "geodesic_distance": 44,
         "map": "Barnyard",
         "object_name": "Truck",
         "difficulty": "Medium",
@@ -1701,6 +1801,7 @@
     },
     {
         "task_id": 100,
+        "geodesic_distance": 40,
         "map": "CityStreet",
         "object_name": "Human",
         "difficulty": "Medium",
@@ -1718,6 +1819,7 @@
     },
     {
         "task_id": 101,
+        "geodesic_distance": 61,
         "map": "CityStreet",
         "object_name": "Car",
         "difficulty": "Medium",
@@ -1735,6 +1837,7 @@
     },
     {
         "task_id": 102,
+        "geodesic_distance": 29,
         "map": "CityStreet",
         "object_name": "Truck",
         "difficulty": "Medium",
@@ -1752,6 +1855,7 @@
     },
     {
         "task_id": 103,
+        "geodesic_distance": 26,
         "map": "CityStreet",
         "object_name": "Excavator",
         "difficulty": "Medium",
@@ -1769,6 +1873,7 @@
     },
     {
         "task_id": 104,
+        "geodesic_distance": 42,
         "map": "CityStreet",
         "object_name": "RoadBarrier",
         "difficulty": "Medium",
@@ -1786,6 +1891,7 @@
     },
     {
         "task_id": 105,
+        "geodesic_distance": 8,
         "map": "CityStreet",
         "object_name": "Sandbox",
         "difficulty": "Medium",
@@ -1803,6 +1909,7 @@
     },
     {
         "task_id": 106,
+        "geodesic_distance": 43,
         "map": "CityStreet",
         "object_name": "VendingMachine",
         "difficulty": "Medium",
@@ -1820,6 +1927,7 @@
     },
     {
         "task_id": 107,
+        "geodesic_distance": 19,
         "map": "CityStreet",
         "object_name": "SignBoard",
         "difficulty": "Medium",
@@ -1837,6 +1945,7 @@
     },
     {
         "task_id": 108,
+        "geodesic_distance": 33,
         "map": "CityStreet",
         "object_name": "Chimney",
         "difficulty": "Medium",
@@ -1854,6 +1963,7 @@
     },
     {
         "task_id": 109,
+        "geodesic_distance": 32,
         "map": "CityStreet",
         "object_name": "StatueTurtle",
         "difficulty": "Medium",
@@ -1871,6 +1981,7 @@
     },
     {
         "task_id": 110,
+        "geodesic_distance": 25,
         "map": "NYC",
         "object_name": "Human",
         "difficulty": "Medium",
@@ -1888,6 +1999,7 @@
     },
     {
         "task_id": 111,
+        "geodesic_distance": 52,
         "map": "NYC",
         "object_name": "Car",
         "difficulty": "Medium",
@@ -1905,6 +2017,7 @@
     },
     {
         "task_id": 112,
+        "geodesic_distance": 52,
         "map": "NYC",
         "object_name": "Car",
         "difficulty": "Medium",
@@ -1922,6 +2035,7 @@
     },
     {
         "task_id": 113,
+        "geodesic_distance": 47,
         "map": "NYC",
         "object_name": "Boat",
         "difficulty": "Medium",
@@ -1939,6 +2053,7 @@
     },
     {
         "task_id": 114,
+        "geodesic_distance": 21,
         "map": "NYC",
         "object_name": "Truck",
         "difficulty": "Medium",
@@ -1956,6 +2071,7 @@
     },
     {
         "task_id": 115,
+        "geodesic_distance": 31,
         "map": "NYC",
         "object_name": "Camper",
         "difficulty": "Medium",
@@ -1973,6 +2089,7 @@
     },
     {
         "task_id": 116,
+        "geodesic_distance": 16,
         "map": "NYC",
         "object_name": "Sandbox",
         "difficulty": "Medium",
@@ -1990,6 +2107,7 @@
     },
     {
         "task_id": 117,
+        "geodesic_distance": 24,
         "map": "NYC",
         "object_name": "Fountain",
         "difficulty": "Medium",
@@ -2007,6 +2125,7 @@
     },
     {
         "task_id": 118,
+        "geodesic_distance": 30,
         "map": "NYC",
         "object_name": "Rowboat",
         "difficulty": "Medium",
@@ -2024,6 +2143,7 @@
     },
     {
         "task_id": 119,
+        "geodesic_distance": 23,
         "map": "NYC",
         "object_name": "Chair",
         "difficulty": "Medium",

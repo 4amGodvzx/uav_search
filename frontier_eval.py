@@ -7,58 +7,32 @@ import datetime
 import os
 import airsim
 import numpy as np
-from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection, SamModel, SamProcessor
-from stable_baselines3 import PPO
-from stable_baselines3.common.vec_env import VecNormalize
+from collections import deque
+from transformers import AutoProcessor, AutoModelForZeroShotObjectDetection
 from gymnasium import spaces
 
-from uav_search.airsim_utils import get_images
-from uav_search.grounded_sam_test import grounded_sam
-from uav_search.map_updating_numpy import add_masks, downsample_masks, map_update_simple
 from uav_search.detection_test import detection_test
-from uav_search.action_model_inputs_test import obstacle_update, map_input_preparation
+from uav_search.airsim_utils import get_images
 
-# --- 配置常量 ---
-DEVICE = "cuda:7"
+DEVICE = "cuda:0"
 DINO_MODEL_DIR = "models/models-grounding-dino-base"
-SAM_MODEL_DIR = "models/models-sam-vit-base"
-ACTION_MODEL_PATH = "uav_search/models/f_ppo_num_3_final_400000.zip"
-STATS_PATH = "uav_search/models/f_ppo_num_3_final.pkl"
+
+UNKNOWN = -1
+FREE = 0
+OCCUPIED = 1
+
+MAP_SIZE_METERS = 100  # 地图边长（米）
+MAP_RESOLUTION = 0.5   # 地图分辨率（米/像素）
+MAP_SHAPE = (int(MAP_SIZE_METERS / MAP_RESOLUTION), int(MAP_SIZE_METERS / MAP_RESOLUTION))
 
 # 地图和栅格化参数
 GRID_SCALE = 5.0
-ATTRACTION_MAP_SIZE = (40, 40, 10)
-OBSTACLE_MAP_SIZE = (40, 40, 10)
 UAV_START_GRID_POS = np.array([20, 20, 5])
 
-# 观测与动作空间
-OBSERVATION_SPACE = spaces.Dict({
-            "attraction_map_input": spaces.Box(low=0, high=1, shape=(10, 20, 20), dtype=np.float32),
-            "exploration_map_input": spaces.Box(low=0, high=1000, shape=(10, 20, 20), dtype=np.float32),
-            "obstacle_map_input": spaces.Box(low=0, high=1, shape=(4, 8, 8), dtype=np.float32)
-        })
-ACTION_SPACE = spaces.Discrete(6)
+ACTION_SPACE = spaces.Discrete(7)
 
 # 动作定义
 YAW_ANGLES = [0, -90, 180, 90]  # North, West, South, East
-
-# 模拟 VecEnv
-class MockVecEnv:
-    def __init__(self, observation_space, action_space):
-        self.observation_space = observation_space
-        self.action_space = action_space
-        self.num_envs = 1
-        self.render_mode = None
-
-    def step(self, actions):
-        raise NotImplementedError
-
-
-    def reset(self):
-        raise NotImplementedError
-
-    def close(self):
-        pass
 
 class UAVSearchAgent:
     def __init__(self, start_position: airsim.Vector3r, target_position: airsim.Vector3r, object_name: str, object_description: str, log_dir="experiment_logs"):
@@ -75,6 +49,9 @@ class UAVSearchAgent:
         self.target_position = target_position
         self.object_name = object_name
         self.object_description = object_description
+        
+        self.grid_map = np.full(MAP_SHAPE, UNKNOWN, dtype=np.int8)
+        self.map_origin = np.array([-MAP_SIZE_METERS / 2, -MAP_SIZE_METERS / 2])
 
         # 初始化日志记录
         self.log_dir = log_dir
@@ -85,28 +62,135 @@ class UAVSearchAgent:
         # 初始化多进程管理器和共享数据
         self.manager = multiprocessing.Manager()
         self._initialize_shared_memory()
+        
+    def _world_to_grid(self, world_pos):
+        if isinstance(world_pos, airsim.Vector3r):
+            world_pos = np.array([world_pos.x_val, world_pos.y_val])
+        grid_pos = (world_pos - self.map_origin) / MAP_RESOLUTION
+        return grid_pos.astype(int)
+
+    def _grid_to_world(self, grid_pos):
+        world_pos = grid_pos.astype(float) * MAP_RESOLUTION + self.map_origin
+        # 返回一个可以在AirSim中使用的Vector3r，Z值需要单独处理
+        return airsim.Vector3r(world_pos[0], world_pos[1], 0)
+
+    def _update_map_with_lidar(self, client, uav_pos_grid):
+        lidar_data = client.getLidarData()
+        if len(lidar_data.point_cloud) < 3:
+            return
+
+        points = np.array(lidar_data.point_cloud, dtype=np.dtype('f4'))
+        points = np.reshape(points, (int(points.shape[0] / 3), 3))
+
+        pose = lidar_data.pose
+        for p in points:
+            world_point = pose.position + airsim.Vector3r(p[0], p[1], p[2])
+            
+            obstacle_grid = self._world_to_grid(world_point)
+            
+            x0, y0 = uav_pos_grid
+            x1, y1 = obstacle_grid
+            
+            if 0 <= x1 < MAP_SHAPE[0] and 0 <= y1 < MAP_SHAPE[1]:
+                dx, dy = abs(x1 - x0), -abs(y1 - y0)
+                sx, sy = 1 if x0 < x1 else -1, 1 if y0 < y1 else -1
+                err = dx + dy
+                while True:
+                    if 0 <= x0 < MAP_SHAPE[0] and 0 <= y0 < MAP_SHAPE[1]:
+                        self.grid_map[x0, y0] = FREE
+                    if x0 == x1 and y0 == y1:
+                        break
+                    e2 = 2 * err
+                    if e2 >= dy:
+                        err += dy
+                        x0 += sx
+                    if e2 <= dx:
+                        err += dx
+                        y0 += sy
+                self.grid_map[x1, y1] = OCCUPIED
+
+
+    def _detect_frontiers(self):
+        frontiers = []
+        visited = np.zeros_like(self.grid_map, dtype=bool)
+        
+        for r in range(MAP_SHAPE[0]):
+            for c in range(MAP_SHAPE[1]):
+                if self.grid_map[r, c] == FREE and not visited[r, c]:
+                    is_frontier_cell = False
+                    for dr in [-1, 0, 1]:
+                        for dc in [-1, 0, 1]:
+                            if dr == 0 and dc == 0:
+                                continue
+                            nr, nc = r + dr, c + dc
+                            if 0 <= nr < MAP_SHAPE[0] and 0 <= nc < MAP_SHAPE[1] and self.grid_map[nr, nc] == UNKNOWN:
+                                is_frontier_cell = True
+                                break
+                        if is_frontier_cell:
+                            break
+                    
+                    if is_frontier_cell:
+                        current_frontier = []
+                        q = deque([(r, c)])
+                        visited[r, c] = True
+                        
+                        while q:
+                            curr_r, curr_c = q.popleft()
+                            current_frontier.append((curr_r, curr_c))
+                            
+                            for dr in [-1, 0, 1]:
+                                for dc in [-1, 0, 1]:
+                                    nr, nc = curr_r + dr, curr_c + dc
+                                    if 0 <= nr < MAP_SHAPE[0] and 0 <= nc < MAP_SHAPE[1] and not visited[nr, nc]:
+                                        neighbor_is_frontier = False
+                                        if self.grid_map[nr, nc] == FREE:
+                                            for dr_n in [-1, 0, 1]:
+                                                for dc_n in [-1, 0, 1]:
+                                                    nnr, nnc = nr + dr_n, nc + dc_n
+                                                    if 0 <= nnr < MAP_SHAPE[0] and 0 <= nnc < MAP_SHAPE[1] and self.grid_map[nnr, nnc] == UNKNOWN:
+                                                        neighbor_is_frontier = True
+                                                        break
+                                                if neighbor_is_frontier: break
+                                        
+                                        if neighbor_is_frontier:
+                                            visited[nr, nc] = True
+                                            q.append((nr, nc))
+                        
+                        if len(current_frontier) > 3:
+                            frontiers.append(current_frontier)
+        return frontiers
+
+    def _select_target_frontier(self, frontiers, uav_pos):
+        if not frontiers:
+            return None
+
+        min_dist = float('inf')
+        best_target = None
+        
+        uav_pos_np = np.array([uav_pos.x_val, uav_pos.y_val])
+
+        for frontier in frontiers:
+            centroid = np.mean(frontier, axis=0)
+            centroid_world = self._grid_to_world(centroid)
+            centroid_world_np = np.array([centroid_world.x_val, centroid_world.y_val])
+            
+            dist = np.linalg.norm(uav_pos_np - centroid_world_np)
+            
+            if dist < min_dist:
+                min_dist = dist
+                best_target = centroid_world
+        
+        return best_target
 
     def _initialize_shared_memory(self):
-        attraction_map = np.zeros((*ATTRACTION_MAP_SIZE, 2), dtype=np.float32)
-        attraction_map[..., 1] = -1  # Initialize weights to -1
-        exploration_map = np.zeros(ATTRACTION_MAP_SIZE, dtype=np.float32)
-        obstacle_map = np.zeros(OBSTACLE_MAP_SIZE, dtype=np.float32)
-
-        self.shared_maps = self.manager.dict({
-            'attraction_map_buffer': attraction_map.tobytes(),
-            'exploration_map_buffer': exploration_map.tobytes(),
-            'obstacle_map_buffer': obstacle_map.tobytes(),
-        })
-
+        self.detection_lock = self.manager.Lock()
+        self.experiment_data = self.manager.list()
         self.shared_detection_info = self.manager.dict({
             'detection_success': False,
             'detected_position': self.manager.list([0.0, 0.0, 0.0]),
             'reach_max_steps': False,
             'terminated': False
         })
-
-        self.data_lock = self.manager.Lock()
-        self.detection_lock = self.manager.Lock()
 
     def _update_uav_pose_from_airsim(self, state: airsim.MultirotorState):
         position = state.kinematics_estimated.position
@@ -136,7 +220,6 @@ class UAVSearchAgent:
         return uav_pose
 
     def _action_process(self):
-        
         action_client = airsim.MultirotorClient(port=41460)
         action_client.confirmConnection()
         action_client.reset()
@@ -150,168 +233,89 @@ class UAVSearchAgent:
         uav_pose = {'position': UAV_START_GRID_POS, 'orientation': 0}
         path_length = 0.0
         
-        action_model = PPO.load(ACTION_MODEL_PATH, device=DEVICE)
-        mock_env = MockVecEnv(OBSERVATION_SPACE, ACTION_SPACE)
-        vec_normalize_object = VecNormalize.load(STATS_PATH, mock_env)
-        vec_normalize_object.training = False
-        vec_normalize_object.norm_reward = False
-        
-        is_success = False
-        oracle_success_achieved = False
-        termination_reason = "max_steps_reached"
-        navigation_error = float('inf')
-
-        start_pos_vec = np.array([self.start_position.x_val, self.start_position.y_val, self.start_position.z_val])
-        target_pos_vec = np.array([self.target_position.x_val, self.target_position.y_val, self.target_position.z_val])
-        optimal_path_length = np.linalg.norm(start_pos_vec - target_pos_vec)
-        
-        experiment_log = {
-            "setup": {
-                "start_position": [start_pos_vec[0],start_pos_vec[1],start_pos_vec[2]],
-                "target_position": [target_pos_vec[0],target_pos_vec[1],target_pos_vec[2]],
-                "object_name": self.object_name
-            },
-            "step_data": [],
-            "episode_summary": {}
-        }
-        
         print("[Action] Initialize complete.")
 
-        for i in range(200): # Max steps
+        for i in range(80): # Max steps
             log_entry = {'step': i}
-
+            
             with self.detection_lock:
                 is_detected = self.shared_detection_info['detection_success']
             if is_detected:
-                detected_pos_list = list(self.shared_detection_info['detected_position'])
-                detected_pos_vec = np.array(detected_pos_list)
-                print(f"[Action] Detection success! Moving to detected position: {detected_pos_list}")
-                navigation_error = np.linalg.norm(detected_pos_vec - target_pos_vec)
-                if navigation_error < 10:
-                    is_success = True
-                    termination_reason = "detection_success"
-                else:
-                    is_success = False
-                    termination_reason = "detection_failure_inaccurate"
-
+                detection_pos = list(self.shared_detection_info['detected_position'])
+                print(f"[Action] Detection success! Moving to detected position: {detection_pos}")
+                log_entry['event'] = 'detection_success'
+                log_entry['final_move_target'] = detection_pos
+                dis_to_target = np.linalg.norm(np.array(detection_pos) - np.array([self.target_position.x_val, self.target_position.y_val, self.target_position.z_val]))
+                log_entry['dis_to_target'] = dis_to_target
+                log_entry['success'] = True if dis_to_target < 10.0 else False
+                self.experiment_data.append(log_entry)
+                    
                 action_client.moveToZAsync(-30, 2).join()
-                action_client.moveToPositionAsync(detected_pos_list[0], detected_pos_list[1], -30, 5).join()
-                path_length += np.linalg.norm(start_pos_vec - detected_pos_vec)
+                action_client.moveToPositionAsync(detection_pos[0], detection_pos[1], -30, 5).join()
                 print("[Action] Reached detected position.")
-                break
-
-            _, depth_image, camera_position, camera_orientation, _, _ = get_images(action_client)
-            camera_fov = 90
+                    
+                with self.detection_lock:
+                    self.shared_detection_info['terminated'] = True
+                return
             
-            step_start_time = time.time()
-            with self.data_lock:
-                obstacle_map_copy = np.frombuffer(self.shared_maps['obstacle_map_buffer'], dtype=np.float32).reshape(OBSTACLE_MAP_SIZE)
-            
-            new_obstacle_map = obstacle_update(obstacle_map_copy, self.start_position, depth_image, camera_fov, camera_position, camera_orientation)
-            
-            with self.data_lock:
-                self.shared_maps['obstacle_map_buffer'] = new_obstacle_map.tobytes()
-                attraction_map_copy = np.frombuffer(self.shared_maps['attraction_map_buffer'], dtype=np.float32).reshape((*ATTRACTION_MAP_SIZE, 2))
-                exploration_map_copy = np.frombuffer(self.shared_maps['exploration_map_buffer'], dtype=np.float32).reshape(ATTRACTION_MAP_SIZE)
-            
-            action_model_input = map_input_preparation(attraction_map_copy, exploration_map_copy, new_obstacle_map, uav_pose)
-            normalized_obs = vec_normalize_object.normalize_obs(action_model_input)
-            action, _ = action_model.predict(normalized_obs, deterministic=True)
-            action = int(action)
-
-            log_entry['step_duration'] = time.time() - step_start_time
-            log_entry['uav_pose_before_action'] = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in uav_pose.items()}
-            log_entry['action_taken'] = action
-
             state = action_client.getMultirotorState()
             position = state.kinematics_estimated.position
-            orientation = state.kinematics_estimated.orientation
-            _, _, yaw = airsim.to_eularian_angles(orientation)
-            
-            dx = 10.0 * np.cos(yaw)
-            dy = 10.0 * np.sin(yaw)
-            new_position = airsim.Vector3r(position.x_val + dx, position.y_val + dy, position.z_val)
-            
-            if action == 0:
-                action_client.moveToPositionAsync(new_position.x_val, new_position.y_val, new_position.z_val, 3, timeout_sec=5).join()
-                path_length += 10.0
-            elif action == 1:
-                target_yaw = YAW_ANGLES[(uav_pose['orientation'] + 1) % 4]
-                action_client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
-            elif action == 2:
-                target_yaw = YAW_ANGLES[(uav_pose['orientation'] - 1 + 4) % 4]
-                action_client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
-            elif action == 3:
-                target_yaw = YAW_ANGLES[(uav_pose['orientation'] + 2) % 4]
-                action_client.rotateToYawAsync(target_yaw, timeout_sec=3).join()
-            elif action == 4:
-                action_client.moveToZAsync(position.z_val - 5.0, 2, timeout_sec=3).join()
-                path_length += 5.0
-            elif action == 5:
-                action_client.moveToZAsync(position.z_val + 5.0, 2, timeout_sec=3).join()
-                path_length += 5.0
+            uav_pos_grid = self._world_to_grid(position)
+            self._update_map_with_lidar(action_client, uav_pos_grid)
 
-            print(f"[Action] Step {i} movement finished.")
+            # 2. Detect Frontiers
+            frontiers = self._detect_frontiers()
+            
+            if not frontiers:
+                print("[Action] No more frontiers to explore. Exploration complete.")
+                log_entry['event'] = 'exploration_complete'
+                self.experiment_data.append(log_entry)
+                break
+
+            # 3. Select Target
+            target_position = self._select_target_frontier(frontiers, position)
+            
+            if target_position is None:
+                print("[Action] Could not select a valid target. Stopping.")
+                break
+                
+            print(f"[Action] Step {i}: Moving to nearest frontier at {target_position.to_numpy_array()}")
+            log_entry['action_taken'] = f"move_to_frontier_{target_position.to_numpy_array()}"
+
+            current_z = position.z_val
+            action_client.moveToPositionAsync(target_position.x_val, target_position.y_val, current_z, 5).join()
+            
+            new_position = action_client.getMultirotorState().kinematics_estimated.position
+            path_length += np.linalg.norm(position.to_numpy_array() - new_position.to_numpy_array())
             
             new_state = action_client.getMultirotorState()
             uav_pose = self._update_uav_pose_from_airsim(new_state)
             
             # Termination check
-            should_terminate = False
+            terminated = False
+            termination_reason = "none"
             collision_info = action_client.simGetCollisionInfo()
             if collision_info.has_collided:
-                should_terminate = True
+                terminated = True
                 termination_reason = "collision"
-            
-            pos = uav_pose['position']
-            if not (0 <= pos[0] < ATTRACTION_MAP_SIZE[0] and 0 <= pos[1] < ATTRACTION_MAP_SIZE[1] and 0 <= pos[2] < ATTRACTION_MAP_SIZE[2]):
-                should_terminate = True
-                termination_reason = "out_of_bounds"
-                
-            current_pos_vec = np.array([new_state.kinematics_estimated.position.x_val, new_state.kinematics_estimated.position.y_val, new_state.kinematics_estimated.position.z_val])
-            dis_to_target_oracle = np.linalg.norm(current_pos_vec - target_pos_vec)
-            if dis_to_target_oracle < 10:
-                oracle_success_achieved = True
 
             log_entry['uav_pose_after_action'] = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in uav_pose.items()}
-            log_entry['distance_to_target_oracle'] = dis_to_target_oracle
-            experiment_log["step_data"].append(log_entry)
+            dis_to_target = np.linalg.norm(np.array([position.x_val,position.y_val,position.z_val]) - np.array([self.target_position.x_val, self.target_position.y_val, self.target_position.z_val]))
+            log_entry['dis_to_target'] = dis_to_target
+            log_entry['oracle_success'] = True if dis_to_target < 10.0 else False
+            self.experiment_data.append(log_entry)
             
-            if should_terminate:
+            if terminated:
                 print(f"[Action] Terminated due to: {termination_reason}")
-                break
+                log_entry['event'] = 'terminated'
+                log_entry['termination_reason'] = termination_reason
+                self.experiment_data.append({'total_path_length': path_length})
+                return
 
-        print(f"[Action] Episode finished. Reason: {termination_reason}")
-
-        if not is_success and navigation_error == float('inf'):
-            final_state = action_client.getMultirotorState()
-            final_pos_vec = np.array([final_state.kinematics_estimated.position.x_val, final_state.kinematics_estimated.position.y_val, final_state.kinematics_estimated.position.z_val])
-            navigation_error = np.linalg.norm(final_pos_vec - target_pos_vec)
-
-        spl = 0.0
-        if is_success:
-            spl = optimal_path_length / max(optimal_path_length, path_length) if path_length > 0 else 1.0
-
-        experiment_log["episode_summary"] = {
-            "success": is_success,
-            "oracle_success": oracle_success_achieved,
-            "termination_reason": termination_reason,
-            "total_steps": i + 1,
-            "path_length_actual": path_length,
-            "path_length_optimal": optimal_path_length,
-            "navigation_error": navigation_error,
-            "spl": spl
-        }
-
-        with self.detection_lock:
-            self.shared_detection_info['terminated'] = True
-            if termination_reason == "max_steps_reached":
-                self.shared_detection_info['reach_max_steps'] = True
-
-        with open(self.log_file, 'w') as f:
-            json.dump(experiment_log, f, indent=4)
-        print(f"Log saved to {self.log_file}")
-
+        print("[Action] Reached max steps.")
+        self.experiment_data.append({'event': 'max_steps_reached'})
+        self.experiment_data.append({'total_path_length': path_length})
+        
     def _detection_process(self):
         time.sleep(2)
         detection_dino_processor = AutoProcessor.from_pretrained(DINO_MODEL_DIR)
@@ -350,56 +354,9 @@ class UAVSearchAgent:
             k += 1
         print("[Detection] Process terminating.")
 
-    def _planning_process(self):
-        time.sleep(5) # Ensure AirSim is ready
-        print("[Planning] Loading models...")
-        dino_processor = AutoProcessor.from_pretrained(DINO_MODEL_DIR)
-        dino_model = AutoModelForZeroShotObjectDetection.from_pretrained(DINO_MODEL_DIR).to(DEVICE)
-        sam_processor = SamProcessor.from_pretrained(SAM_MODEL_DIR)
-        sam_model = SamModel.from_pretrained(SAM_MODEL_DIR).to(DEVICE)
-        print("[Planning] Models loaded.")
-
-        planning_client = airsim.MultirotorClient(port=41460)
-        planning_client.confirmConnection()
-        j = 0
-
-        while True:
-            with self.detection_lock:
-                if self.shared_detection_info['terminated'] or self.shared_detection_info['detection_success']:
-                    break
-            
-            pil_image, depth_image, camera_position, camera_orientation, _, rgb_base64 = get_images(planning_client)
-            camera_fov = 90
-            
-            result_dict, attraction_scores = grounded_sam(None, None, dino_processor, dino_model, sam_processor, sam_model, pil_image, rgb_base64, self.object_description)
-
-            if not result_dict["success"]:
-                print("[Planning] Grounded-SAM failed, skipping this frame.")
-                time.sleep(1)
-                continue
-
-            with self.data_lock:
-                attraction_map = np.frombuffer(self.shared_maps['attraction_map_buffer'], dtype=np.float32).reshape((*ATTRACTION_MAP_SIZE, 2))
-                exploration_map = np.frombuffer(self.shared_maps['exploration_map_buffer'], dtype=np.float32).reshape(ATTRACTION_MAP_SIZE)
-
-            added_masks = add_masks(result_dict["masks"])
-            prepared_masks = downsample_masks(added_masks, scale_factor=2)
-            state = planning_client.getMultirotorState()
-            uav_pose = self._update_uav_pose_from_airsim(state)
-            new_attraction_map, new_exploration_map, _ = map_update_simple(attraction_map, exploration_map, prepared_masks, attraction_scores, self.start_position, depth_image, camera_fov, camera_position, camera_orientation, uav_pose["orientation"])
-
-            with self.data_lock:
-                self.shared_maps['attraction_map_buffer'] = new_attraction_map.tobytes()
-                self.shared_maps['exploration_map_buffer'] = new_exploration_map.tobytes()
-
-            print(f"[Planning] Cycle {j} Done.")
-            j += 1
-        print("[Planning] Process terminating.")
-
     def run(self):
         processes = [
             multiprocessing.Process(target=self._action_process, name="Action"),
-            multiprocessing.Process(target=self._planning_process, name="Planning"),
             multiprocessing.Process(target=self._detection_process, name="Detection")
         ]
 
@@ -418,32 +375,17 @@ class UAVSearchAgent:
             for p in processes:
                 p.join()
         finally:
+            print("All processes have finished. Saving log...")
+            with open(self.log_file, 'w') as f:
+                json.dump(list(self.experiment_data), f, indent=4)
+            print(f"Log saved to {self.log_file}")
+            
             print("Resetting AirSim environment...")
             client = airsim.MultirotorClient(port=41460)
             client.reset()
             client.armDisarm(False)
             client.enableApiControl(False)
             print("Done.")
-'''
-if __name__ == "__main__":
-    # --- 实验配置 ---
-    # 从数据集中读取或在此处定义
-    exp_start_position = airsim.Vector3r(1301.0,-1028.0,-6.0)
-    exp_target_position = airsim.Vector3r(1263.0,-989.0,2.0)  # 示例目标位置
-    exp_object_name = "PlaygroundSet"
-    exp_object_description = f"{exp_object_name}: Multi-functional wooden play structure with slide, climbing wall, swings, and elevated playhouse, red and green painted surfaces, intended for children."
-
-    # --- 创建并运行智能体 ---
-    agent = UAVSearchAgent(
-        start_position=exp_start_position,
-        target_position=exp_target_position,
-        object_name=exp_object_name,
-        object_description=exp_object_description,
-        log_dir="experiment_logs"
-    )
-    
-    agent.run()
-'''
 
 def wait_for_airsim_ready(timeout_sec=120):
     time.sleep(10)
@@ -505,7 +447,7 @@ class ExperimentRunner:
         
         # 启动新的AirSim进程
         print(f"Launching new AirSim process for map '{target_map_name}'...")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=7']
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=0']
         self.airsim_process = subprocess.Popen(launch_command, start_new_session=True)
         self.current_map_name = target_map_name
         
@@ -605,7 +547,7 @@ if __name__ == "__main__":
     TASKS_JSON_PATH = "uav_search/task_map/val_tasks.json"
     
     # 3. 定义日志保存的根目录
-    BASE_LOG_DIR = "all_experiment_logs"
+    BASE_LOG_DIR = "random_experiment_logs"
 
     # --- 启动实验 ---
     if not os.path.exists(TASKS_JSON_PATH):

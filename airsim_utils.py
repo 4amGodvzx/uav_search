@@ -41,3 +41,13 @@ def get_train_images(client: airsim.MultirotorClient) -> tuple:
     camera_orientation = depth_response.camera_orientation
 
     return depth_image, camera_position, camera_orientation
+
+def get_eval_images(client: airsim.MultirotorClient) -> tuple:
+    responses = client.simGetImages([
+        airsim.ImageRequest("0", airsim.ImageType.Scene, False, True),
+    ])
+    
+    rgb_vis = responses[0].image_data_uint8
+    b64_image = base64.b64encode(rgb_vis).decode("utf-8")
+    
+    return b64_image

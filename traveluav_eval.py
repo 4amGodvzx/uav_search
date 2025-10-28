@@ -7,13 +7,132 @@ import datetime
 import os
 import airsim
 import numpy as np
-from gymnasium import spaces
+import torch
+from dashscope import MultiModalConversation
+
+from uav_search.traveluav_utils import BaseModelWrapper, load_model, load_traj_model, prepare_data_to_inputs, prepare_data_to_traj_model, transform_to_world, inputs_to_batch, DinoMonitor
+from uav_search.airsim_utils import get_eval_images
+
+def mllm_api(rgb_base64, object_description) -> dict:
+    system_prompt = f'''
+        You are an aerial navigation agent. You will receive a target description and a current camera observation. Your task is to determine the next action based on the target description and the current camera view. Prioritize flight safety while choosing actions that are most likely to help locate the specified target.
+        Output your decision as an integer from 0 to 6, where:  
+        0: Move forward  
+        1: Turn left  
+        2: Turn right  
+        3: Turn backward  
+        4: Ascend  
+        5: Descend  
+        6: Stop (only choose this if you are certain the target is within 10 meters)  
+        Respond with only the integer corresponding to your chosen action.  
+        Now, based on the following input, provide your response:  
+    '''
+    messages=[
+                {"role": "system", "content": [system_prompt]},
+                {
+                    "role": "user",
+                    "content": [
+                        {"image": f"data:image/png;base64,{rgb_base64}"},
+                        {"text": object_description} # From dataset
+                    ]
+                }
+            ]
+
+    try:
+        response = MultiModalConversation.call(
+            api_key="sk-cfccd77d667c4147a11f6e293c1edb62",
+            model="qwen-vl-max",
+            messages=messages
+        )
+
+        if not response or "output" not in response:
+            raise RuntimeError("DashScope API response is None or missing 'output'")
+        else:
+            return {
+                "success": True,
+                "response": response.output.choices[0].message.content[0]["text"]
+            }
+    except Exception as e:
+        print(f"[Planning] Error occurred: {e}")
+        return {
+            "success": False,
+            "response": str(e)
+        }
+    
+class TravelModelWrapper(BaseModelWrapper):
+    def __init__(self, model_args, data_args):
+        self.tokenizer, self.model, self.image_processor = load_model(model_args)
+        self.traj_model = load_traj_model(model_args)
+        self.model.to(torch.bfloat16)
+        self.traj_model.to(dtype=torch.bfloat16, device=self.model.device)
+        self.dino_moinitor = None
+        self.model_args = model_args
+        self.data_args = data_args
+
+    def prepare_inputs(self, episodes, target_positions, assist_notices=None):
+        inputs = []
+        rot_to_targets = []
+        
+        for i in range(len(episodes)):
+            input_item, rot_to_target = prepare_data_to_inputs(
+                episodes=episodes[i],
+                tokenizer=self.tokenizer,
+                image_processor=self.image_processor,
+                data_args=self.data_args,
+                target_point=target_positions[i],
+                assist_notice=assist_notices[i] if assist_notices is not None else None
+            )
+            inputs.append(input_item)
+            rot_to_targets.append(rot_to_target)
+        batch = inputs_to_batch(tokenizer=self.tokenizer, instances=inputs)
+
+        inputs_device = {k: v.to(self.model.device) for k, v in batch.items() 
+            if 'prompts' not in k and 'images' not in k and 'historys' not in k}
+        inputs_device['prompts'] = [item for item in batch['prompts']]
+        inputs_device['images'] = [item.to(self.model.device) for item in batch['images']]
+        inputs_device['historys'] = [item.to(device=self.model.device, dtype=self.model.dtype) for item in batch['historys']]
+        inputs_device['orientations'] = inputs_device['orientations'].to(dtype=self.model.dtype)
+        inputs_device['return_waypoints'] = True
+        inputs_device['use_cache'] = False
+        
+        return inputs_device, rot_to_targets
+
+    def run_llm_model(self, inputs):
+        waypoints_llm = self.model(**inputs).cpu().to(dtype=torch.float32).numpy()
+        waypoints_llm_new = []
+        for waypoint in waypoints_llm:
+            waypoint_new = waypoint[:3] / (1e-6 + np.linalg.norm(waypoint[:3])) * waypoint[3]
+            waypoints_llm_new.append(waypoint_new)
+        return np.array(waypoints_llm_new)
+
+    def run_traj_model(self, episodes, waypoints_llm_new, rot_to_targets):
+        inputs = prepare_data_to_traj_model(episodes, waypoints_llm_new, self.image_processor, rot_to_targets)
+        waypoints_traj = self.traj_model(inputs, None)
+        refined_waypoints = waypoints_traj.cpu().to(dtype=torch.float32).numpy()
+        refined_waypoints = transform_to_world(refined_waypoints, episodes)
+        return refined_waypoints
+    
+    def eval(self):
+        self.model.eval()
+        self.traj_model.eval()
+        
+    def run(self, inputs, episodes, rot_to_targets):
+        waypoints_llm_new = self.run_llm_model(inputs)
+        refined_waypoints = self.run_traj_model(episodes, waypoints_llm_new, rot_to_targets)
+        return refined_waypoints
+    
+    def predict_done(self, episodes, object_infos):
+        prediction_dones = []
+        if self.dino_moinitor is None:
+            self.dino_moinitor = DinoMonitor.get_instance()
+        for i in range(len(episodes)):
+            prediction_done = self.dino_moinitor.get_dino_results(episodes[i], object_infos[i])
+            prediction_dones.append(prediction_done)
+        return prediction_dones
 
 # 地图和栅格化参数
 GRID_SCALE = 5.0
 UAV_START_GRID_POS = np.array([20, 20, 5])
-
-ACTION_SPACE = spaces.Discrete(7)
 
 # 动作定义
 YAW_ANGLES = [0, -90, 180, 90]  # North, West, South, East
@@ -105,14 +224,21 @@ class UAVSearchAgent:
         for i in range(80): # Max steps
             log_entry = {'step': i}
             
-            action = ACTION_SPACE.sample()
+            rgb_base64 = get_eval_images(action_client)
+            mllm_result = mllm_api(rgb_base64, self.object_description)
+            
+            if not mllm_result["success"]:
+                print("MLLM生成对象描述失败")
+                continue
+            
+            action = int(mllm_result["response"])
 
             log_entry['uav_pose_before_action'] = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in uav_pose.items()}
-            log_entry['action_taken'] = float(action)
+            log_entry['action_taken'] = action
 
             state = action_client.getMultirotorState()
             position = state.kinematics_estimated.position
-            
+
             current_pos_vec = np.array([position.x_val, position.y_val, position.z_val])
             dis_to_target = np.linalg.norm(current_pos_vec - target_pos_vec)
             
@@ -170,14 +296,14 @@ class UAVSearchAgent:
             if should_terminate:
                 print(f"[Action] Terminated due to: {termination_reason}")
                 break
-            
+ 
         final_state = action_client.getMultirotorState()
         final_pos_vec = np.array([final_state.kinematics_estimated.position.x_val, final_state.kinematics_estimated.position.y_val, final_state.kinematics_estimated.position.z_val])
         navigation_error = np.linalg.norm(final_pos_vec - target_pos_vec)
 
         spl = 0.0
         if is_success:
-            spl = optimal_path_length / max(optimal_path_length, path_length)
+            spl = optimal_path_length / max(optimal_path_length, path_length) if path_length > 0 else 1.0
 
         experiment_log["episode_summary"] = {
             "success": is_success,
@@ -214,7 +340,7 @@ class UAVSearchAgent:
             for p in processes:
                 p.join()
         finally:
-            print("All processes have finished.") 
+            print("All processes have finished. Saving log...")
             print("Resetting AirSim environment...")
             client = airsim.MultirotorClient(port=41460)
             client.reset()
@@ -282,7 +408,7 @@ class ExperimentRunner:
         
         # 启动新的AirSim进程
         print(f"Launching new AirSim process for map '{target_map_name}'...")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=0']
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=6']
         self.airsim_process = subprocess.Popen(launch_command, start_new_session=True)
         self.current_map_name = target_map_name
         
@@ -382,7 +508,7 @@ if __name__ == "__main__":
     TASKS_JSON_PATH = "uav_search/task_map/val_tasks.json"
     
     # 3. 定义日志保存的根目录
-    BASE_LOG_DIR = "random_experiment_logs"
+    BASE_LOG_DIR = "traveluav_experiment_logs"
 
     # --- 启动实验 ---
     if not os.path.exists(TASKS_JSON_PATH):

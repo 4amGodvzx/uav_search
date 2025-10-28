@@ -7,13 +7,59 @@ import datetime
 import os
 import airsim
 import numpy as np
-from gymnasium import spaces
+from dashscope import MultiModalConversation
+
+from uav_search.airsim_utils import get_eval_images
+
+def mllm_api(rgb_base64, object_description) -> dict:
+    system_prompt = f'''
+        You are an aerial navigation agent. You will receive a target description and a current camera observation. Your task is to determine the next action based on the target description and the current camera view. Prioritize flight safety while choosing actions that are most likely to help locate the specified target.
+        Output your decision as an integer from 0 to 6, where:  
+        0: Move forward  
+        1: Turn left  
+        2: Turn right  
+        3: Turn backward  
+        4: Ascend  
+        5: Descend  
+        6: Stop (only choose this if you are certain the target is within 10 meters)  
+        Respond with only the integer corresponding to your chosen action.  
+        Now, based on the following input, provide your response:  
+    '''
+    messages=[
+                {"role": "system", "content": [system_prompt]},
+                {
+                    "role": "user",
+                    "content": [
+                        {"image": f"data:image/png;base64,{rgb_base64}"},
+                        {"text": object_description} # From dataset
+                    ]
+                }
+            ]
+
+    try:
+        response = MultiModalConversation.call(
+            api_key="sk-cfccd77d667c4147a11f6e293c1edb62",
+            model="qwen-vl-max",
+            messages=messages
+        )
+
+        if not response or "output" not in response:
+            raise RuntimeError("DashScope API response is None or missing 'output'")
+        else:
+            return {
+                "success": True,
+                "response": response.output.choices[0].message.content[0]["text"]
+            }
+    except Exception as e:
+        print(f"[Planning] Error occurred: {e}")
+        return {
+            "success": False,
+            "response": str(e)
+        }
 
 # 地图和栅格化参数
 GRID_SCALE = 5.0
 UAV_START_GRID_POS = np.array([20, 20, 5])
-
-ACTION_SPACE = spaces.Discrete(7)
 
 # 动作定义
 YAW_ANGLES = [0, -90, 180, 90]  # North, West, South, East
@@ -105,14 +151,21 @@ class UAVSearchAgent:
         for i in range(80): # Max steps
             log_entry = {'step': i}
             
-            action = ACTION_SPACE.sample()
+            rgb_base64 = get_eval_images(action_client)
+            mllm_result = mllm_api(rgb_base64, self.object_description)
+            
+            if not mllm_result["success"]:
+                print("MLLM生成对象描述失败")
+                continue
+            
+            action = int(mllm_result["response"])
 
             log_entry['uav_pose_before_action'] = {k: v.tolist() if isinstance(v, np.ndarray) else v for k, v in uav_pose.items()}
-            log_entry['action_taken'] = float(action)
+            log_entry['action_taken'] = action
 
             state = action_client.getMultirotorState()
             position = state.kinematics_estimated.position
-            
+
             current_pos_vec = np.array([position.x_val, position.y_val, position.z_val])
             dis_to_target = np.linalg.norm(current_pos_vec - target_pos_vec)
             
@@ -170,14 +223,14 @@ class UAVSearchAgent:
             if should_terminate:
                 print(f"[Action] Terminated due to: {termination_reason}")
                 break
-            
+ 
         final_state = action_client.getMultirotorState()
         final_pos_vec = np.array([final_state.kinematics_estimated.position.x_val, final_state.kinematics_estimated.position.y_val, final_state.kinematics_estimated.position.z_val])
         navigation_error = np.linalg.norm(final_pos_vec - target_pos_vec)
 
         spl = 0.0
         if is_success:
-            spl = optimal_path_length / max(optimal_path_length, path_length)
+            spl = optimal_path_length / max(optimal_path_length, path_length) if path_length > 0 else 1.0
 
         experiment_log["episode_summary"] = {
             "success": is_success,
@@ -214,7 +267,7 @@ class UAVSearchAgent:
             for p in processes:
                 p.join()
         finally:
-            print("All processes have finished.") 
+            print("All processes have finished. Saving log...")
             print("Resetting AirSim environment...")
             client = airsim.MultirotorClient(port=41460)
             client.reset()
@@ -282,7 +335,7 @@ class ExperimentRunner:
         
         # 启动新的AirSim进程
         print(f"Launching new AirSim process for map '{target_map_name}'...")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=0']
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=6']
         self.airsim_process = subprocess.Popen(launch_command, start_new_session=True)
         self.current_map_name = target_map_name
         
@@ -382,7 +435,7 @@ if __name__ == "__main__":
     TASKS_JSON_PATH = "uav_search/task_map/val_tasks.json"
     
     # 3. 定义日志保存的根目录
-    BASE_LOG_DIR = "random_experiment_logs"
+    BASE_LOG_DIR = "mllm_experiment_logs"
 
     # --- 启动实验 ---
     if not os.path.exists(TASKS_JSON_PATH):

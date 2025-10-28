@@ -9,10 +9,10 @@ from uav_search.to_map_test import to_map_xyz
 
 # Hyperparameters
 detection_box_threshold = 0.3
-detection_text_threshold = 0.6
+detection_text_threshold = 0.7
 
 def detection_test(processor, model, pil_image, depth_image, camera_info, camera_position, camera_orientation, object_name) :
-    device = "cuda:0" 
+    device = "cuda:7" 
     warnings.filterwarnings("ignore")  # 关闭所有警告
 
     processor = processor
