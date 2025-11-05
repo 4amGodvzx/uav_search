@@ -20,7 +20,7 @@ PRETRAINED_MODEL_PATH = os.path.join(checkpoint_dir, "ppo_num_3_600000_steps.zip
 
 VEC_NORMALIZE_STATS_PATH = os.path.join(checkpoint_dir, "ppo_num_3_vecnormalize_600000_steps.pkl")
 
-NEW_MODEL_NAME = "f_ppo_num_3" 
+NEW_MODEL_NAME = "f_ppo_num_5" 
 
 if __name__ == '__main__':
     num_cpu = 4
@@ -51,9 +51,9 @@ if __name__ == '__main__':
     # 3. 加载预训练的模型权重
     print(f"Loading pretrained model from {PRETRAINED_MODEL_PATH}")
     # 将模型与我们精心准备好的新 vec_env 关联起来
-    model = PPO.load(PRETRAINED_MODEL_PATH, env=vec_env, device="cuda:0", tensorboard_log = log_dir)
+    model = PPO.load(PRETRAINED_MODEL_PATH, env=vec_env, device="cuda:2", tensorboard_log = log_dir)
 
-    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir, name_prefix="f_ppo_num_3", save_vecnormalize=True)
+    checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir, name_prefix="f_ppo_num_5", save_vecnormalize=True)
     # 4. 开始新的训练
     # TIMESTEPS 是你希望在微调阶段额外训练的步数
     FINETUNE_TIMESTEPS = 400000 

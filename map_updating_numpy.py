@@ -258,7 +258,8 @@ def map_update_simple(attraction_map, exploration_map, prepared_masks, attractio
     
     VIEW_DEPTH = 30.0   # 视线距离
     VIEW_HEIGHT = 20.0  # 垂直视野高度
-    EXPLORATION_GAIN = 1.0 # 每次观测，探索值增加的基础量
+    EXPLORATION_GAIN = 0.5 # 每次观测，探索值增加的基础量
+    EXPLORATION_ACCELERATION_FACTOR = 0.2
 
     drone_world_pos = camera_position.to_numpy_array().flatten()
 
@@ -289,11 +290,13 @@ def map_update_simple(attraction_map, exploration_map, prepared_masks, attractio
     if traversed_indices_prism.shape[0] > 0:
         # 计算探索值的增加量，距离越近增加越多
         gx, gy, gz = traversed_indices_prism.T
+        old_exploration_values = exploration_map[gx, gy, gz]
         distances_for_update = np.linalg.norm(relative_coords[in_prism_mask], axis=1)
         distances_for_update = np.clip(distances_for_update, 0, VIEW_DEPTH)
 
         # 距离越远，增加量越小 (线性衰减)
         exploration_increase = (1 - distances_for_update / VIEW_DEPTH) * EXPLORATION_GAIN
+        #acceleration_term = old_exploration_values * EXPLORATION_ACCELERATION_FACTOR
 
         new_exploration_map[gx, gy, gz] += exploration_increase
     # Hyperparameter: 遗忘因子

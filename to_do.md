@@ -31,7 +31,7 @@
 10. (Done)Get the ground truth dataset of the map
 11. (Done)Warning: Logical error in exploration map updating
 12. (Done)Warning: The error in trace_rays_vectorized()
-13. (not neccesary now)Problem about the deciding LLM : episodical hallucination
+13. (Done)Whole test for Reward shaping
 14. (not neccesary)Curriculum learning
 15. (Done)Warning: Set the timeout time of airsim api in test code
 16. (Done)Warning: The uav prefers to get more attraction reward rather than reach the target quickly
@@ -39,7 +39,7 @@
 18. (Done)More training logs
 19. (not neccesary)EvalCallBack()
 20. (Done) Catastrophic forgetting in RL training
-21. (Done)Whole test for Reward shaping
+21. (not neccesary now)Problem about the deciding LLM : episodical hallucination
 
 # The Policies
 1. Map input: Relative location (Alt: absolute location)
@@ -77,18 +77,12 @@
 7. hyperparameters and model choice for MLLM, GroundingDINO, SAM
 8. RL training hyperparameters
     - reward design
-        - distance reward weight
-            - distance reward distance threshold
-            - distance reward decay rate
-            - step penalty weight
         - attraction reward weight
             - attraction reward distance threshold
-            - attraction reward decay rate
             - attraction key point extra reward
         - exploration reward weight
             - exploration reward distance threshold
             - exploration reward/punishment boundary
-            - exploration reward decay rate
         - collision/boundary punishment weight
         - success reward weight
             - success distance threshold
@@ -107,13 +101,30 @@
 
 1. 
 - ppo_num_3:
-- TIMESTEPS=600000, max_steps = 100
+- TIMESTEPS=600000
 - REWARD_DISTANCE_THRESHOLD = 30.0 KEY_THRESHOLD = 0.9 KEY_REWARD = 5.0
 - VIEW_DEPTH = 30.0 VIEW_HEIGHT = 20.0 RATE_CENTER = 0.4 EXPLORATION_GAIN = 0.5
 - W_ATTRACTION = 0.0, W_EXPLORATION = 0.2, W_DISTANCE = 0.0, W_SPARSE = 1.0, STEP_PENALTY = 0.0, ,success reward = 0.0, termination_reward = -50.0
-- f_ppo_num_3:
-- TIMESTEPS=400000, max_steps = 100
+- f_ppo_num_3(all_experiment_logs):
 - REWARD_DISTANCE_THRESHOLD = 30.0 KEY_THRESHOLD = 0.9 KEY_REWARD = 5.0
 - VIEW_DEPTH = 30.0 VIEW_HEIGHT = 20.0 RATE_CENTER = 0.4 EXPLORATION_GAIN = 0.5
 - W_ATTRACTION = 1.0, W_EXPLORATION = 0.2, W_DISTANCE = 0.0, W_SPARSE = 1.0, STEP_PENALTY = 0.0, ,success reward = 50.0, termination_reward = -50.0
-- 600000 pretrain + 400000 finetune
+- 600000 pretrain + 600000 finetune
+2. 
+- zeroshot(z_experiment_logs):
+- REWARD_DISTANCE_THRESHOLD = 50.0 KEY_THRESHOLD = 0.9 KEY_REWARD = 5.0
+- VIEW_DEPTH_R = 100.0 VIEW_HEIGHT_R = 30.0
+- VIEW_DEPTH = 50.0 VIEW_HEIGHT = 30.0 RATE_CENTER = 0.4 EXPLORATION_GAIN = 0.5 EXPLORATION_ACCELERATION_FACTOR = 0.2
+- W_ATTRACTION = 1.0, W_EXPLORATION = 0.4
+3. 
+- f_ppo_num_4(all4_experiment_logs):
+- REWARD_DISTANCE_THRESHOLD = 30.0 KEY_THRESHOLD = 0.9 KEY_REWARD = 5.0
+- VIEW_DEPTH = 30.0 VIEW_HEIGHT = 20.0 RATE_CENTER = 0.4 EXPLORATION_GAIN = 0.5
+- W_ATTRACTION = 1.0, W_EXPLORATION = 0.8, W_DISTANCE = 0.0, W_SPARSE = 1.0, STEP_PENALTY = 0.0, ,success reward = 50.0, termination_reward = -50.0
+- 600000 pretrain + 600000 finetune
+4. 
+- f_ppo_num_5(all5_experiment_logs):
+- REWARD_DISTANCE_THRESHOLD = 30.0 KEY_THRESHOLD = 0.9 KEY_REWARD = 5.0
+- VIEW_DEPTH = 30.0 VIEW_HEIGHT = 20.0 RATE_CENTER = 0.4 EXPLORATION_GAIN = 0.5
+- W_ATTRACTION = 1.0, W_EXPLORATION = 0.5, W_DISTANCE = 0.0, W_SPARSE = 1.0, STEP_PENALTY = 0.0, ,success reward = 50.0, termination_reward = -50.0
+- 600000 pretrain + 600000 finetune

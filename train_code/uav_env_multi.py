@@ -166,7 +166,7 @@ class AirSimDroneEnv(gym.Env):
             raise ValueError(f"No launch script found for map: {target_map_name}")
         
         print(f"Launching new AirSim process with script: {script_path}")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=7', f'-settings="{self.settings_path}"'] # 注意GPU的选择
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=2', f'-settings="{self.settings_path}"'] # 注意GPU的选择
         self.airsim_process = subprocess.Popen(launch_command,start_new_session=True)
         self.current_map_name = target_map_name
         self._connect_to_airsim()
@@ -311,7 +311,7 @@ class AirSimDroneEnv(gym.Env):
     def _compute_reward(self,terminated, attraction_reward=0.0, exploration_reward=0.0):
         # Reward weights
         W_ATTRACTION = 1.0
-        W_EXPLORATION = 0.2
+        W_EXPLORATION = 0.5
         W_DISTANCE = 0.0
         W_SPARSE = 1.0
         STEP_PENALTY = 0.0

@@ -3,18 +3,23 @@ import os
 import numpy as np
 import argparse
 
-def print_and_calculate_metrics(summaries, group_name, geodesic_distances, start_index=0):
+# <<< MODIFIED: 函数签名改变，接收 episode_data 而不是 summaries
+def print_and_calculate_metrics(episode_data, group_name, geodesic_distances, start_index=0):
     """
     计算并打印指定摘要列表的各项性能指标。
     
-    :param summaries: 一个包含 episode_summary 字典的列表。
+    :param episode_data: 一个包含 {'summary': ..., 'duration': ...} 字典的列表。
     :param group_name: 字符串，用于在打印时标识该组（如 "Seen Tasks"）。
     :param geodesic_distances: 与摘要列表对应的测地线距离列表。
     :param start_index: 该组在全局任务列表中的起始索引，用于计算全局任务序号。
     """
-    if not summaries:
+    if not episode_data:
         print(f"\n--- {group_name}: No data to analyze ---")
         return
+
+    # <<< MODIFIED: 从 episode_data 中提取 summaries 和 durations
+    summaries = [item['summary'] for item in episode_data]
+    durations = [item['duration'] for item in episode_data]
 
     # --- 1. 数据预处理和逻辑修正 ---
     for s in summaries:
@@ -28,9 +33,15 @@ def print_and_calculate_metrics(summaries, group_name, geodesic_distances, start
     successful_episodes_count = sum(1 for s in summaries if s.get("success", False))
     success_rate = successful_episodes_count / total_episodes if total_episodes > 0 else 0
 
+    collision_count = sum(1 for s in summaries if s.get("termination_reason") == "collision" or s.get("termination_reason") == "out_of_bounds")
+    collision_rate = collision_count / total_episodes if total_episodes > 0 else 0
+
     # Oracle Success Rate (在修正后计算)
     oracle_successful_episodes_count = sum(1 for s in summaries if s.get("oracle_success", False))
     oracle_success_rate = oracle_successful_episodes_count / total_episodes if total_episodes > 0 else 0
+
+    all_path_lengths = [s.get("path_length_actual") for s in summaries if s.get("path_length_actual") is not None]
+    avg_path_length = np.mean(all_path_lengths) if all_path_lengths else 0.0
     
     # Navigation Error (计算所有episodes的平均值)
     all_nav_errors = [s.get("navigation_error") for s in summaries if s.get("navigation_error") is not None]
@@ -39,24 +50,20 @@ def print_and_calculate_metrics(summaries, group_name, geodesic_distances, start
     else:
         print(f"Warning for '{group_name}': 'navigation_error' key not found. Cannot calculate Average Navigation Error.")
         avg_nav_error = float('nan')
+        
+    # <<< MODIFIED: 计算平均 episode 时长
+    avg_step_duration = np.mean(durations) if durations else 0.0
 
     # --- SPL (Success weighted by Path Length) - 使用传入的 geodesic_distance 重新计算 ---
     spl_scores = []
-    # 确保传入的测地线距离列表与摘要列表长度匹配
     if geodesic_distances and len(geodesic_distances) == len(summaries):
         for i, s in enumerate(summaries):
             if s.get("success", False):
-                # 从日志中获取智能体实际行走的路径长度
                 actual_path_length = s.get("path_length_actual", float('inf'))
-                # 从传入的列表中获取最优路径长度（测地线距离）
                 optimal_path_length = geodesic_distances[i]
-                
-                # 计算SPL： Si * (Li / max(Li, Pi))
-                # 其中Si是成功标志, Li是最优路径, Pi是实际路径
                 spl_score = optimal_path_length / max(optimal_path_length, actual_path_length)
                 spl_scores.append(spl_score)
             else:
-                # 失败的任务，SPL为0
                 spl_scores.append(0.0)
         
         avg_spl = np.mean(spl_scores) if spl_scores else 0.0
@@ -64,7 +71,6 @@ def print_and_calculate_metrics(summaries, group_name, geodesic_distances, start
         print(f"Warning for '{group_name}': Geodesic distances not provided or length mismatch. Cannot calculate SPL.")
         avg_spl = float('nan')
 
-    # 获取成功任务的序号
     successful_task_indices = [start_index + i + 1 for i, s in enumerate(summaries) if s.get("success", False)]
 
     # --- 结果打印 ---
@@ -77,6 +83,10 @@ def print_and_calculate_metrics(summaries, group_name, geodesic_distances, start
     print(f"Oracle Success Rate:        {oracle_success_rate:.4f} ({oracle_successful_episodes_count}/{total_episodes})")
     print(f"Average Navigation Error:   {avg_nav_error:.4f} (meters, over ALL episodes)")
     print(f"Average SPL:                {avg_spl:.4f} (re-calculated with geodesic distance)")
+    print(f"Collision Rate:             {collision_rate:.4f} ({collision_count}/{total_episodes})")
+    print(f"Average Path Length:        {avg_path_length:.4f} (meters)")
+    # <<< MODIFIED: 打印新的指标
+    print(f"Average Step Duration:   {avg_step_duration:.4f} (seconds)")
     print("-" * 45)
     print(f"Successful Task Indices:    {successful_task_indices}")
     print("="*45)
@@ -86,11 +96,9 @@ def analyze_logs(log_dir, tasks_file):
     """
     分析日志文件，并使用外部任务文件中的测地线距离来计算SPL。
     """
-    # --- 1. 加载外部任务文件以获取测地线距离 ---
     try:
         with open(tasks_file, 'r') as f:
             val_tasks = json.load(f)
-        # 提取所有任务的测地线距离到一个列表中
         all_geodesic_distances = [task['geodesic_distance'] for task in val_tasks]
         print(f"Successfully loaded {len(all_geodesic_distances)} geodesic distances from '{tasks_file}'.")
     except FileNotFoundError:
@@ -100,40 +108,53 @@ def analyze_logs(log_dir, tasks_file):
         print(f"Error reading or parsing '{tasks_file}': {e}. Check file format.")
         return
 
-    # --- 2. 加载所有实验日志摘要 ---
-    all_summaries = []
+    # <<< MODIFIED: 创建一个新的列表来存储 summary 和 duration
+    all_episode_data = []
     filenames = sorted([f for f in os.listdir(log_dir) if f.endswith(".json")])
     
     if not filenames:
         print(f"No .json log files found in '{log_dir}'.")
         return
         
-    print(f"Found {len(filenames)} log files. Reading summaries...")
+    print(f"Found {len(filenames)} log files. Reading summaries and step durations...")
     for filename in filenames:
         filepath = os.path.join(log_dir, filename)
         try:
             with open(filepath, 'r') as f:
                 data = json.load(f)
-                if "episode_summary" in data and data["episode_summary"]:
-                    all_summaries.append(data["episode_summary"])
+                # 假设包含详细步骤的键是 'step_history'，如果不是请修改这里
+                step_history_key = "step_data" 
+                
+                if "episode_summary" in data and data["episode_summary"] and step_history_key in data:
+                    summary = data["episode_summary"]
+                    
+                    # <<< MODIFIED: 计算当前 episode 的平均每步时长
+                    step_durations = [step.get("step_duration", 0) for step in data[step_history_key]]
+                    avg_step_duration = np.mean(step_durations) if step_durations else 0.0
+
+                    # <<< MODIFIED: 将 summary 和 duration 一起存储
+                    all_episode_data.append({
+                        "summary": summary,
+                        "duration": avg_step_duration
+                    })
                 else:
-                    print(f"Warning: Skipping {filename}, 'episode_summary' is missing or empty.")
+                    print(f"Warning: Skipping {filename}, 'episode_summary' or '{step_history_key}' is missing or empty.")
         except (json.JSONDecodeError, KeyError) as e:
             print(f"Warning: Could not process {filename}. Error: {e}")
 
-    if not all_summaries:
-        print("No valid experiment summaries found to analyze.")
+    if not all_episode_data:
+        print("No valid experiment data found to analyze.")
         return
 
-    # --- 3. 检查数据一致性并分割数据集 ---
-    total_tasks_from_logs = len(all_summaries)
+    # <<< MODIFIED: 使用 all_episode_data 进行后续操作
+    total_tasks_from_logs = len(all_episode_data)
     total_tasks_from_file = len(all_geodesic_distances)
     min_tasks = min(total_tasks_from_logs, total_tasks_from_file)
     if total_tasks_from_logs != total_tasks_from_file:
         print(f"\nCRITICAL WARNING: Mismatch between log files ({total_tasks_from_logs}) and tasks in JSON file ({total_tasks_from_file}).")
-        # 决定是继续还是中止，这里选择继续并使用较小的值作为任务总数
         min_tasks = min(total_tasks_from_logs, total_tasks_from_file)
-        all_summaries = all_summaries[:min_tasks]
+        # <<< MODIFIED: 截断 all_episode_data
+        all_episode_data = all_episode_data[:min_tasks]
         all_geodesic_distances = all_geodesic_distances[:min_tasks]
         print(f"Proceeding with the first {min_tasks} tasks.")
     
@@ -141,16 +162,17 @@ def analyze_logs(log_dir, tasks_file):
     if min_tasks < num_seen:
         print("Warning: Total tasks are less than 90, 'Unseen' group will be empty.")
 
-    seen_summaries = all_summaries[:num_seen]
-    unseen_summaries = all_summaries[num_seen:]
+    # <<< MODIFIED: 分割新的数据结构
+    seen_data = all_episode_data[:num_seen]
+    unseen_data = all_episode_data[num_seen:]
     
     seen_geodesic_distances = all_geodesic_distances[:num_seen]
     unseen_geodesic_distances = all_geodesic_distances[num_seen:]
 
-    # --- 4. 分别计算和打印结果 ---
-    print_and_calculate_metrics(seen_summaries, "Seen Tasks", seen_geodesic_distances, start_index=0)
-    print_and_calculate_metrics(unseen_summaries, "Unseen Tasks", unseen_geodesic_distances, start_index=num_seen)
-    print_and_calculate_metrics(all_summaries, "Overall", all_geodesic_distances, start_index=0)
+    # <<< MODIFIED: 传递新的数据结构给分析函数
+    print_and_calculate_metrics(seen_data, "Seen Tasks", seen_geodesic_distances, start_index=0)
+    print_and_calculate_metrics(unseen_data, "Unseen Tasks", unseen_geodesic_distances, start_index=num_seen)
+    print_and_calculate_metrics(all_episode_data, "Overall", all_geodesic_distances, start_index=0)
 
 
 if __name__ == "__main__":
@@ -158,10 +180,9 @@ if __name__ == "__main__":
     parser.add_argument(
         '--log-dir', 
         type=str, 
-        default="random_experiment_logs", 
+        default="all_experiment_logs", 
         help="Directory containing the experiment log files."
     )
-    # 新增命令行参数，用于指定任务文件
     parser.add_argument(
         '--tasks-file',
         type=str,
@@ -174,3 +195,4 @@ if __name__ == "__main__":
         print(f"Error: Log directory not found at '{args.log_dir}'")
     else:
         analyze_logs(args.log_dir, args.tasks_file)
+

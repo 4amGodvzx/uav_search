@@ -98,6 +98,42 @@ def map_input_preparation(attraction_map, exploration_map, obstacle_map, uav_pos
     }
     
     return map_input
+
+def map_input_preparation_z(attraction_map, exploration_map, obstacle_map, uav_pose: dict):
+    position = np.array(uav_pose['position'])
+    orientation = uav_pose['orientation']
+
+    attraction_map_input = _crop_rotate_and_pad(
+        full_map=attraction_map[:, :, :, 0],
+        center_coords=position,
+        crop_size=(40, 40, 10),
+        padding_value=-1.0,
+        orientation=orientation
+    )
+
+    exploration_map_input = _crop_rotate_and_pad(
+        full_map=exploration_map,
+        center_coords=position,
+        crop_size=(40, 40, 10),
+        padding_value=-1.0,
+        orientation=orientation
+    )
+
+    obstacle_map_input = _crop_rotate_and_pad(
+        full_map=obstacle_map,
+        center_coords=position,
+        crop_size=(40, 40, 10),
+        padding_value=1.0,
+        orientation=orientation
+    )
+    
+    map_input = {
+        'attraction_map_input': attraction_map_input,
+        'exploration_map_input': exploration_map_input,
+        'obstacle_map_input': obstacle_map_input
+    }
+    
+    return map_input
 '''
 original_shape_attraction = (40, 40, 10, 2)
 original_shape_exploration = (40, 40, 10)

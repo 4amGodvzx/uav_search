@@ -19,7 +19,7 @@ from uav_search.detection_test import detection_test
 from uav_search.action_model_inputs_test import obstacle_update, map_input_preparation
 
 # --- 配置常量 ---
-DEVICE = "cuda:5"
+DEVICE = "cuda:3"
 DINO_MODEL_DIR = "models/models-grounding-dino-base"
 SAM_MODEL_DIR = "models/models-sam-vit-base"
 ACTION_MODEL_PATH = "uav_search/models/f_ppo_num_4_final_400000.zip"
@@ -499,7 +499,7 @@ class ExperimentRunner:
         
         # 启动新的AirSim进程
         print(f"Launching new AirSim process for map '{target_map_name}'...")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=5']
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=3']
         self.airsim_process = subprocess.Popen(launch_command, start_new_session=True)
         self.current_map_name = target_map_name
         
@@ -596,7 +596,7 @@ if __name__ == "__main__":
     }
 
     # 2. 定义任务配置文件的路径
-    TASKS_JSON_PATH = "uav_search/task_map/val_tasks_1.json"
+    TASKS_JSON_PATH = "uav_search/task_map/val_tasks.json"
     
     # 3. 定义日志保存的根目录
     BASE_LOG_DIR = "all4_experiment_logs"
