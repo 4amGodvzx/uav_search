@@ -31,7 +31,7 @@ def downsample_masks(masks, scale_factor):
 
 import numpy as np
 
-def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=3, gain=10.0) -> np.ndarray:
+def exploration_rate(distance: np.ndarray, max_depth=50, decay_factor=0.05, gain=10.0) -> np.ndarray:
     rates = np.where(
         distance > max_depth, 
         0.0, 

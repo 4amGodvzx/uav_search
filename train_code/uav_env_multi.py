@@ -166,7 +166,7 @@ class AirSimDroneEnv(gym.Env):
             raise ValueError(f"No launch script found for map: {target_map_name}")
         
         print(f"Launching new AirSim process with script: {script_path}")
-        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=2', f'-settings="{self.settings_path}"'] # 注意GPU的选择
+        launch_command = ['bash', script_path, '-RenderOffscreen', '-NoSound', '-NoVSync', '-GraphicsAdapter=6', f'-settings="{self.settings_path}"'] # 注意GPU的选择
         self.airsim_process = subprocess.Popen(launch_command,start_new_session=True)
         self.current_map_name = target_map_name
         self._connect_to_airsim()

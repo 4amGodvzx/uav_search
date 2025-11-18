@@ -180,7 +180,7 @@ if __name__ == "__main__":
     parser.add_argument(
         '--log-dir', 
         type=str, 
-        default="all_experiment_logs", 
+        default="alld0.05_experiment_logs", 
         help="Directory containing the experiment log files."
     )
     parser.add_argument(

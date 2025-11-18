@@ -51,7 +51,7 @@ if __name__ == '__main__':
     # 3. 加载预训练的模型权重
     print(f"Loading pretrained model from {PRETRAINED_MODEL_PATH}")
     # 将模型与我们精心准备好的新 vec_env 关联起来
-    model = PPO.load(PRETRAINED_MODEL_PATH, env=vec_env, device="cuda:2", tensorboard_log = log_dir)
+    model = PPO.load(PRETRAINED_MODEL_PATH, env=vec_env, device="cuda:6", tensorboard_log = log_dir)
 
     checkpoint_callback = CheckpointCallback(save_freq=5000, save_path=checkpoint_dir, name_prefix="f_ppo_num_5", save_vecnormalize=True)
     # 4. 开始新的训练

@@ -43,11 +43,8 @@
 
 # The Policies
 1. Map input: Relative location (Alt: absolute location)
-2. Navigation policy: Asynchronous (Alt: Synchronous)
-3. Action output: Discrete (Alt: Continuous)
-4. Obstacle input: Obstacle map (Alt: Depth image)
-5. Obstacle avoidance: RL-based (Alt: Rule-based)
-6. Training method: Synchronous
+2. Action output: Discrete (Alt: Continuous)
+3. Obstacle avoidance: RL-based (Alt: Rule-based)
 
 # Hyperparameters or method to decide(to be completed)
 
@@ -97,7 +94,7 @@
 
 - Warning: RGB image size must be 2 times the depth image size
 
-# Reward Shape testing
+# Testing
 
 1. 
 - ppo_num_3:
@@ -128,3 +125,12 @@
 - VIEW_DEPTH = 30.0 VIEW_HEIGHT = 20.0 RATE_CENTER = 0.4 EXPLORATION_GAIN = 0.5
 - W_ATTRACTION = 1.0, W_EXPLORATION = 0.5, W_DISTANCE = 0.0, W_SPARSE = 1.0, STEP_PENALTY = 0.0, ,success reward = 50.0, termination_reward = -50.0
 - 600000 pretrain + 600000 finetune
+5. 
+- f_ppo_num_3(alld0.5_experiment_logs):
+- decay_rate = 0.5
+6. 
+- f_ppo_num_3(alld0.1_experiment_logs):
+- decay_rate = 0.1
+7. 
+- f_ppo_num_3(alld0.05_experiment_logs):
+- decay_rate = 0.05
